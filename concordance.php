@@ -33,7 +33,7 @@ if (function_exists('get_plugin_data')) {
     $concordance_plugin_data = get_plugin_data(__FILE__, false, false);
     define('CONCORDANCE_VERSION', $concordance_plugin_data['Version']);
 } else {
-    define('CONCORDANCE_VERSION', '1.0.0');
+    define('CONCORDANCE_VERSION', 'Unknown');
 }
 define('CONCORDANCE_PLUGIN_DIR', $concordance_plugin_dir);
 define('CONCORDANCE_PLUGIN_URL', $concordance_plugin_url);
