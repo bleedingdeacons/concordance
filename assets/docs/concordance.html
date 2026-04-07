@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Concordance Plugin — User Documentation</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #FAFAF8;
+            --surface: #FFFFFF;
+            --border: #E8E5E0;
+            --text: #1A1A18;
+            --text-secondary: #6B6860;
+            --accent: #D97706;
+            --accent-bg: #FEF3C7;
+            --accent-dark: #B45309;
+            --info: #1D4ED8;
+            --info-bg: #DBEAFE;
+            --danger: #DC2626;
+            --danger-bg: #FEE2E2;
+            --success: #16A34A;
+            --success-bg: #DCFCE7;
+            --purple: #7C3AED;
+            --purple-bg: #EDE9FE;
+            --code-bg: #F5F3EF;
+            --nav-width: 280px;
+            --header-height: 64px;
+            --radius: 10px;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.04);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.06);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; scroll-padding-top: calc(var(--header-height) + 24px); }
+        body {
+            font-family: 'DM Sans', sans-serif; font-size: 16px; line-height: 1.7;
+            color: var(--text); background: var(--bg); -webkit-font-smoothing: antialiased;
+        }
+
+        .site-header {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+            height: var(--header-height); background: rgba(250,250,248,0.92);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; padding: 0 24px; gap: 16px;
+        }
+        .site-header .logo {
+            display: flex; align-items: center; gap: 10px;
+            font-weight: 700; font-size: 20px; color: var(--text);
+            text-decoration: none; letter-spacing: -0.3px;
+        }
+        .site-header .logo span { color: var(--accent); }
+        .site-header .version {
+            font-size: 12px; font-weight: 500; color: var(--text-secondary);
+            background: var(--code-bg); padding: 2px 8px; border-radius: 6px;
+        }
+        .hamburger {
+            display: none; background: none; border: none; cursor: pointer;
+            width: 36px; height: 36px; flex-shrink: 0;
+            border-radius: 8px; align-items: center; justify-content: center;
+        }
+        .hamburger:hover { background: var(--code-bg); }
+        .hamburger svg { width: 22px; height: 22px; color: var(--text); }
+
+        .sidebar {
+            position: fixed; top: var(--header-height); left: 0; bottom: 0;
+            width: var(--nav-width); overflow-y: auto;
+            border-right: 1px solid var(--border);
+            background: var(--bg); padding: 24px 0; z-index: 90;
+        }
+        .sidebar::-webkit-scrollbar { width: 4px; }
+        .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        .nav-section { padding: 0 20px; margin-bottom: 24px; }
+        .nav-section-title {
+            font-size: 11px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 1px; color: var(--text-secondary); margin-bottom: 8px; padding-left: 12px;
+        }
+        .nav-link {
+            display: block; padding: 6px 12px; border-radius: 8px;
+            color: var(--text-secondary); text-decoration: none;
+            font-size: 14px; font-weight: 400; transition: all 0.15s; line-height: 1.5;
+        }
+        .nav-link:hover { color: var(--text); background: var(--surface); }
+        .nav-link.active { color: var(--accent-dark); background: var(--accent-bg); font-weight: 500; }
+
+        .main {
+            margin-left: var(--nav-width);
+            padding: calc(var(--header-height) + 40px) 48px 80px; max-width: 880px;
+        }
+
+        h1 { font-size: 36px; font-weight: 700; letter-spacing: -0.8px; line-height: 1.2; margin-bottom: 12px; }
+        h1 .emoji { font-size: 32px; margin-right: 4px; }
+        .subtitle { font-size: 18px; color: var(--text-secondary); font-weight: 400; margin-bottom: 40px; line-height: 1.6; }
+        h2 {
+            font-size: 24px; font-weight: 700; letter-spacing: -0.4px;
+            margin-top: 56px; margin-bottom: 16px; padding-top: 24px;
+            border-top: 1px solid var(--border);
+        }
+        h2:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+        h3 { font-size: 18px; font-weight: 600; margin-top: 32px; margin-bottom: 10px; }
+        p { margin-bottom: 16px; }
+        ul, ol { margin-bottom: 16px; padding-left: 24px; }
+        li { margin-bottom: 6px; }
+
+        .card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 24px; margin-bottom: 24px; box-shadow: var(--shadow-sm);
+        }
+        .card h3 { margin-top: 0; }
+        .callout {
+            border-radius: var(--radius); padding: 16px 20px; margin-bottom: 24px;
+            font-size: 15px; display: flex; gap: 12px; align-items: flex-start; line-height: 1.6;
+        }
+        .callout-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+        .callout.info { background: var(--info-bg); border-left: 4px solid var(--info); }
+        .callout.warning { background: var(--accent-bg); border-left: 4px solid var(--accent); }
+        .callout.danger { background: var(--danger-bg); border-left: 4px solid var(--danger); }
+        .callout.success { background: var(--success-bg); border-left: 4px solid var(--success); }
+
+        code {
+            font-family: 'JetBrains Mono', monospace; font-size: 13.5px;
+            background: var(--code-bg); padding: 2px 7px; border-radius: 5px; color: var(--accent-dark);
+        }
+        pre {
+            background: #1E1E1C; color: #D4D0C8; border-radius: var(--radius);
+            padding: 20px 24px; margin-bottom: 24px; overflow-x: auto;
+            font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.7;
+        }
+        pre code { background: none; padding: 0; color: inherit; }
+        pre .c { color: #7A7A6E; }
+        pre .k { color: #C586C0; }
+        pre .s { color: #CE9178; }
+        pre .n { color: #9CDCFE; }
+        pre .f { color: #DCDCAA; }
+        pre .t { color: #4EC9B0; }
+
+        .status-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 15px; }
+        .status-table th {
+            text-align: left; padding: 10px 16px; font-weight: 600;
+            border-bottom: 2px solid var(--border); font-size: 13px;
+            text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary);
+        }
+        .status-table td { padding: 10px 16px; border-bottom: 1px solid var(--border); vertical-align: top; }
+
+        .badge {
+            display: inline-block; padding: 2px 10px; border-radius: 20px;
+            font-size: 13px; font-weight: 600;
+        }
+        .badge-core { background: var(--info-bg); color: var(--info); }
+        .badge-ext { background: var(--purple-bg); color: var(--purple); }
+
+        .steps { counter-reset: step; list-style: none; padding-left: 0; }
+        .steps li {
+            counter-increment: step; padding-left: 44px; position: relative;
+            margin-bottom: 20px; min-height: 32px;
+        }
+        .steps li::before {
+            content: counter(step); position: absolute; left: 0; top: 0;
+            width: 30px; height: 30px; border-radius: 50%;
+            background: var(--accent); color: #fff;
+            font-weight: 700; font-size: 14px;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        .arch-flow {
+            display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+            margin-bottom: 24px; font-size: 14px; font-weight: 500;
+        }
+        .arch-flow .node {
+            background: var(--surface); border: 1px solid var(--border);
+            padding: 8px 16px; border-radius: 8px; box-shadow: var(--shadow-sm);
+        }
+        .arch-flow .node.highlight { background: var(--accent-bg); border-color: var(--accent); color: var(--accent-dark); }
+        .arch-flow .arrow { color: var(--text-secondary); font-size: 18px; }
+
+        .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 80; }
+
+        @media (max-width: 860px) {
+            .sidebar { transform: translateX(-100%); transition: transform 0.25s ease; box-shadow: var(--shadow-md); }
+            .sidebar.open { transform: translateX(0); }
+            .overlay.visible { display: block; }
+            .hamburger { display: flex; }
+            .main { margin-left: 0; padding: calc(var(--header-height) + 24px) 20px 60px; }
+            h1 { font-size: 28px; } h2 { font-size: 20px; }
+            pre { padding: 16px; font-size: 12px; }
+            .status-table { font-size: 14px; }
+            .status-table th, .status-table td { padding: 8px 10px; }
+            .arch-flow { font-size: 12px; }
+        }
+
+        @media print {
+            .site-header, .sidebar, .hamburger, .overlay { display: none !important; }
+            .main { margin-left: 0; padding: 20px; max-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+<header class="site-header">
+    <button class="hamburger" onclick="toggleNav()" aria-label="Toggle navigation">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <a href="#" class="logo">
+        <span>📡</span> Concordance <span>Docs</span>
+    </a>
+</header>
+
+<div class="overlay" onclick="toggleNav()"></div>
+
+<nav class="sidebar" id="sidebar">
+    <div class="nav-section">
+        <div class="nav-section-title">Getting Started</div>
+        <a href="#overview" class="nav-link active">Overview</a>
+        <a href="#requirements" class="nav-link">Requirements</a>
+        <a href="#installation" class="nav-link">Installation</a>
+        <a href="#configuration" class="nav-link">Configuration</a>
+        <a href="#wp-cli" class="nav-link">WP-CLI Commands</a>
+    </div>
+    <div class="nav-section">
+        <div class="nav-section-title">Architecture</div>
+        <a href="#boot-sequence" class="nav-link">Boot Sequence</a>
+        <a href="#container" class="nav-link">PSR-11 Container</a>
+        <a href="#service-catalogue" class="nav-link">Service Catalogue</a>
+        <a href="#hooks" class="nav-link">WordPress Hooks</a>
+    </div>
+    <div class="nav-section">
+        <div class="nav-section-title">API Client</div>
+        <a href="#api-client" class="nav-link">ApiClient</a>
+        <a href="#api-cache" class="nav-link">ApiCache</a>
+        <a href="#authentication" class="nav-link">Authentication</a>
+        <a href="#api-response" class="nav-link">API Response Shape</a>
+    </div>
+    <div class="nav-section">
+        <div class="nav-section-title">Domain Model</div>
+        <a href="#group-listing" class="nav-link">GroupListing</a>
+    </div>
+    <div class="nav-section">
+        <div class="nav-section-title">Features</div>
+        <a href="#rest-api" class="nav-link">REST API Proxy</a>
+        <a href="#admin-settings" class="nav-link">Admin Settings</a>
+    </div>
+    <div class="nav-section">
+        <div class="nav-section-title">Reference</div>
+        <a href="#directory-structure" class="nav-link">Directory Structure</a>
+        <a href="#build" class="nav-link">Build</a>
+        <a href="#error-handling" class="nav-link">Error Handling</a>
+        <a href="#troubleshooting" class="nav-link">Troubleshooting</a>
+        <a href="#faq" class="nav-link">FAQ</a>
+    </div>
+</nav>
+
+<main class="main">
+
+    <!-- Overview -->
+    <section id="overview">
+        <h1><span class="emoji">📡</span> Concordance Plugin</h1>
+        <p class="subtitle">
+            A standalone WordPress API client for the AAGB DB Groups API. Provides transient caching, REST API proxy and WP-CLI commands.
+        </p>
+
+        <div class="card">
+            <h3>What does Concordance do?</h3>
+            <p>Concordance connects your WordPress site to the <strong>AAGBDB Groups API</strong> at <code>https://aagbdb.org.uk/api/groups/</code>. It fetches group data via an authenticated API key, caches responses in WordPress transients, and exposes the data through a REST proxy for JavaScript consumers and WP-CLI commands for developers and automation.</p>
+            <p style="margin-bottom:0;">The plugin is fully standalone — it requires no external WordPress plugins. Its only Composer dependency is <code>psr/container ^2.0</code> for the PSR-11 container interface.</p>
+        </div>
+
+        <div class="card">
+            <h3>Key Features</h3>
+            <table class="status-table" style="margin-bottom:0;">
+                <thead><tr><th>Feature</th><th>Details</th></tr></thead>
+                <tbody>
+                <tr><td>API Client</td><td>GET/POST with configurable timeout, full error handling, debug response access</td></tr>
+                <tr><td>Transient Cache</td><td>Configurable TTL, automatic invalidation, manual flush via CLI or deactivation</td></tr>
+                <tr><td>REST Proxy</td><td><code>/wp-json/concordance/v1/groups</code> — keeps API key server-side</td></tr>
+                <tr><td>WP-CLI</td><td><code>wp concordance list|get|test|flush-cache|config</code></td></tr>
+                <tr><td>Admin Page</td><td>API key management, cache TTL, connection tester</td></tr>
+                <tr><td>DI Container</td><td>Lightweight PSR-11 implementation with lazy singleton resolution</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- Requirements -->
+    <section id="requirements">
+        <h2>Requirements</h2>
+
+        <table class="status-table">
+            <thead><tr><th>Requirement</th><th>Minimum</th></tr></thead>
+            <tbody>
+            <tr><td>PHP</td><td>8.1+</td></tr>
+            <tr><td>WordPress</td><td>6.0+</td></tr>
+            <tr><td>Composer</td><td>2.x (for dependency installation)</td></tr>
+            <tr><td>AAGBDB API Key</td><td>Required — provided by your intergroup</td></tr>
+            </tbody>
+        </table>
+
+        <div class="callout info">
+            <span class="callout-icon">💡</span>
+            <div>Concordance is fully standalone. It does not depend on Unity, Amber, Scrutiny, or any other plugin in the suite. You can install it on any WordPress site.</div>
+        </div>
+    </section>
+
+    <!-- Installation -->
+    <section id="installation">
+        <h2>Installation</h2>
+
+        <ol class="steps">
+            <li>Copy the <code>concordance/</code> directory into <code>wp-content/plugins/</code>.</li>
+            <li>Run <code>composer install</code> from the plugin directory to install the <code>psr/container</code> dependency.</li>
+            <li>Activate the plugin in <strong>Plugins → Installed Plugins</strong>.</li>
+            <li>Go to <strong>Settings → Concordance API</strong> to verify your API key and test the connection.</li>
+        </ol>
+
+        <p>On first activation, the plugin stores a default API key and cache TTL (900 seconds) in <code>wp_options</code>. You can change both from the settings page.</p>
+    </section>
+
+    <!-- Configuration -->
+    <section id="configuration">
+        <h2>Configuration</h2>
+        <p>All configuration is stored in <code>wp_options</code> and managed through the admin settings page at <strong>Settings → Concordance API</strong>.</p>
+
+        <table class="status-table">
+            <thead><tr><th>Option</th><th>Key</th><th>Default</th><th>Description</th></tr></thead>
+            <tbody>
+            <tr><td>API Key</td><td><code>concordance_api_key</code></td><td>Pre-filled on activation</td><td>AAGBDB API authentication key</td></tr>
+            <tr><td>Cache TTL</td><td><code>concordance_cache_ttl</code></td><td><code>900</code> (15 min)</td><td>Transient cache lifetime in seconds. Set to 0 to disable.</td></tr>
+            </tbody>
+        </table>
+
+        <p>Constants are defined in <code>ConcordanceConfiguration</code> and cannot be changed at runtime:</p>
+
+        <table class="status-table">
+            <thead><tr><th>Constant</th><th>Value</th></tr></thead>
+            <tbody>
+            <tr><td><code>API_BASE_URL</code></td><td><code>https://aagbdb.org.uk/api</code></td></tr>
+            <tr><td><code>REQUEST_TIMEOUT</code></td><td><code>30</code> seconds</td></tr>
+            <tr><td><code>CACHE_PREFIX</code></td><td><code>concordance_</code></td></tr>
+            <tr><td><code>REST_NAMESPACE</code></td><td><code>concordance/v1</code></td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- WP-CLI Commands -->
+    <section id="wp-cli">
+        <h2>WP-CLI Commands</h2>
+        <p>Concordance registers the <code>wp concordance</code> command when WP-CLI is active. All subcommands are injected from the container with full access to the API client and cache.</p>
+
+        <div class="card">
+            <h3><code>wp concordance list</code></h3>
+            <p>List all groups from the AAGBDB API.</p>
+            <table class="status-table" style="margin-bottom:0;">
+                <thead><tr><th>Option</th><th>Description</th></tr></thead>
+                <tbody>
+                <tr><td><code>--format=&lt;format&gt;</code></td><td>Output format: <code>table</code>, <code>json</code>, <code>csv</code>, <code>yaml</code>. Default: <code>table</code>.</td></tr>
+                <tr><td><code>--fields=&lt;fields&gt;</code></td><td>Comma-separated list of fields to display.</td></tr>
+                <tr><td><code>--limit=&lt;n&gt;</code></td><td>Maximum number of groups. Default: 0 (all).</td></tr>
+                <tr><td><code>--intergroup=&lt;id&gt;</code></td><td>Filter by intergroup ID.</td></tr>
+                <tr><td><code>--sort=&lt;fields&gt;</code></td><td>Sort results. Comma-separated for multi-sort. Accepts: <code>day</code>, <code>time</code>, <code>name</code>. E.g. <code>--sort=day,time</code>.</td></tr>
+                <tr><td><code>--no-cache</code></td><td>Bypass the transient cache and fetch fresh data.</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h3><code>wp concordance get &lt;id&gt;</code></h3>
+            <p style="margin-bottom:0;">Fetch and display a single group by ID. Supports <code>--format</code> and <code>--fields</code>.</p>
+        </div>
+
+        <div class="card">
+            <h3><code>wp concordance test</code></h3>
+            <p style="margin-bottom:0;">Test the API connection. Displays success with a group count, or the error message on failure.</p>
+        </div>
+
+        <div class="card">
+            <h3><code>wp concordance flush-cache</code></h3>
+            <p style="margin-bottom:0;">Clear all Concordance transient caches. Displays the number of deleted entries.</p>
+        </div>
+
+        <div class="card">
+            <h3><code>wp concordance config</code></h3>
+            <p style="margin-bottom:0;">Display the current API configuration in a table: base URL, masked API key, cache TTL, timeout, and REST namespace.</p>
+        </div>
+
+        <h3>Examples</h3>
+        <pre><code><span class="c"># List all groups as a table</span>
+wp concordance list
+
+<span class="c"># Export as JSON, specific fields only</span>
+wp concordance list --format=json --fields=groupName,day,startTime
+
+<span class="c"># First 5 groups, bypass cache</span>
+wp concordance list --limit=5 --no-cache
+
+<span class="c"># Filter by intergroup ID</span>
+wp concordance list --intergroup=1
+
+<span class="c"># Sort by day of week</span>
+wp concordance list --sort=day
+
+<span class="c"># Sort by day then time</span>
+wp concordance list --sort=day,time
+
+<span class="c"># Sort by day, time, then name</span>
+wp concordance list --sort=day,time,name --intergroup=1
+
+<span class="c"># Fetch a single group</span>
+wp concordance get 42
+
+<span class="c"># Test the connection</span>
+wp concordance test
+
+<span class="c"># Clear all cached data</span>
+wp concordance flush-cache
+
+<span class="c"># Show current configuration</span>
+wp concordance config</code></pre>
+    </section>
+
+    <!-- Boot Sequence -->
+    <section id="boot-sequence">
+        <h2>Boot Sequence</h2>
+        <p>Concordance initialises on the <code>plugins_loaded</code> WordPress hook at priority 10:</p>
+
+        <div class="arch-flow">
+            <div class="node">WordPress loads plugin</div>
+            <div class="arrow">→</div>
+            <div class="node">Composer autoloader</div>
+            <div class="arrow">→</div>
+            <div class="node highlight">plugins_loaded</div>
+            <div class="arrow">→</div>
+            <div class="node">Plugin::init()</div>
+            <div class="arrow">→</div>
+            <div class="node highlight">concordance/loaded</div>
+        </div>
+
+        <p>Inside <code>Plugin::init()</code>, the following happens in order:</p>
+
+        <ol class="steps">
+            <li>A new <code>Container</code> (PSR-11) is created.</li>
+            <li>All services are registered as lazy factories in the container.</li>
+            <li><code>GroupListingManager</code> is resolved — this registers the REST routes.</li>
+            <li>If in admin context, <code>SettingsAdmin</code> is resolved — this registers the settings page.</li>
+            <li>If WP-CLI is active, <code>ConcordanceCli</code> is resolved and registered as the <code>wp concordance</code> command.</li>
+            <li>The <code>concordance/loaded</code> action fires with the container as its parameter.</li>
+        </ol>
+    </section>
+
+    <!-- PSR-11 Container -->
+    <section id="container">
+        <h2>PSR-11 Container</h2>
+        <p>Concordance ships its own lightweight dependency injection container that implements <code>Psr\Container\ContainerInterface</code>. It lives at <code>src/Core/Container.php</code>.</p>
+
+        <div class="card">
+            <h3>How It Works</h3>
+            <p>Services are registered as <code>Closure</code> factories. Each factory receives the container as its argument and returns the fully constructed service. Services are resolved lazily (on first <code>get()</code>) and cached as singletons — subsequent calls return the same instance.</p>
+
+            <pre style="margin-bottom:0;"><code><span class="c">// Register a service</span>
+<span class="n">$container</span>-><span class="f">register</span>(<span class="t">ApiClient</span>::class, <span class="k">function</span> (<span class="t">ContainerInterface</span> <span class="n">$c</span>) {
+    <span class="k">return new</span> <span class="t">ApiClient</span>();
+});
+
+<span class="c">// Resolve (creates once, caches)</span>
+<span class="n">$client</span> = <span class="n">$container</span>-><span class="f">get</span>(<span class="t">ApiClient</span>::class);
+
+<span class="c">// Check existence</span>
+<span class="n">$container</span>-><span class="f">has</span>(<span class="t">ApiClient</span>::class); <span class="c">// true</span></code></pre>
+        </div>
+
+        <div class="card">
+            <h3>Exception Classes</h3>
+            <table class="status-table" style="margin-bottom:0;">
+                <thead><tr><th>Exception</th><th>Implements</th><th>When</th></tr></thead>
+                <tbody>
+                <tr><td><code>NotFoundException</code></td><td><code>NotFoundExceptionInterface</code></td><td>No factory registered for the given ID</td></tr>
+                <tr><td><code>ContainerException</code></td><td><code>ContainerExceptionInterface</code></td><td>Factory throws during resolution</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <h3>Global Helper</h3>
+        <p>The global <code>concordance()</code> function returns the container singleton from anywhere after <code>plugins_loaded</code>:</p>
+
+        <pre><code><span class="c">// Resolve the API client from anywhere</span>
+<span class="n">$client</span> = <span class="f">concordance</span>()-><span class="f">get</span>(<span class="t">ApiClient</span>::class);
+<span class="n">$groups</span> = <span class="n">$client</span>-><span class="f">getGroups</span>();
+
+<span class="c">// Or use the cached version</span>
+<span class="n">$groups</span> = <span class="f">concordance</span>()-><span class="f">get</span>(<span class="t">ApiCache</span>::class)-><span class="f">getGroups</span>();</code></pre>
+    </section>
+
+    <!-- Service Catalogue -->
+    <section id="service-catalogue">
+        <h2>Service Catalogue</h2>
+        <p>All services registered in the container. Every service is <span class="badge badge-core">Built-in</span> — Concordance is fully self-contained.</p>
+
+        <table class="status-table">
+            <thead><tr><th>Service</th><th>Class</th><th>Role</th></tr></thead>
+            <tbody>
+            <tr><td><code>ApiClient</code></td><td><code>Concordance\Api\ApiClient</code></td><td>HTTP client for the AAGBDB API</td></tr>
+            <tr><td><code>ApiCache</code></td><td><code>Concordance\Api\ApiCache</code></td><td>Transient caching wrapper around ApiClient</td></tr>
+            <tr><td><code>GroupListingManager</code></td><td><code>Concordance\Managers\GroupListingManager</code></td><td>REST route handler</td></tr>
+            <tr><td><code>SettingsAdmin</code></td><td><code>Concordance\Admin\SettingsAdmin</code></td><td>Admin settings page (admin context only)</td></tr>
+            <tr><td><code>ConcordanceCli</code></td><td><code>Concordance\Cli\ConcordanceCli</code></td><td>WP-CLI commands (CLI context only)</td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- WordPress Hooks -->
+    <section id="hooks">
+        <h2>WordPress Hooks</h2>
+
+        <div class="card">
+            <h3><code>concordance/loaded</code></h3>
+            <p>Fires after all services are registered and the plugin is fully operational. Other plugins can listen on this hook to integrate with Concordance.</p>
+            <p style="margin-bottom:0;"><strong>Parameter:</strong> <code>Psr\Container\ContainerInterface $container</code></p>
+        </div>
+
+        <pre><code><span class="f">add_action</span>(<span class="s">'concordance/loaded'</span>, <span class="k">function</span> (<span class="t">ContainerInterface</span> <span class="n">$container</span>) {
+    <span class="n">$groups</span> = <span class="n">$container</span>-><span class="f">get</span>(<span class="t">ApiCache</span>::class)-><span class="f">getGroups</span>();
+    <span class="c">// Do something with the groups data</span>
+});</code></pre>
+
+        <div class="callout info">
+            <span class="callout-icon">💡</span>
+            <div>Concordance boots on <code>plugins_loaded</code> at priority 10, so any code that runs after that (including <code>init</code>, <code>wp_loaded</code>, and template hooks) can safely call <code>concordance()</code>.</div>
+        </div>
+    </section>
+
+    <!-- API Client -->
+    <section id="api-client">
+        <h2>ApiClient</h2>
+        <p>The <code>ApiClient</code> class handles all HTTP communication with the AAGBDB API. It uses <code>wp_remote_request</code> internally and returns decoded JSON arrays on success or <code>WP_Error</code> on failure.</p>
+
+        <table class="status-table">
+            <thead><tr><th>Method</th><th>Returns</th><th>Description</th></tr></thead>
+            <tbody>
+            <tr><td><code>getGroups(array $queryArgs = [])</code></td><td><code>array|WP_Error</code></td><td>Fetch all groups from <code>/api/groups/</code></td></tr>
+            <tr><td><code>getGroup(int|string $groupId)</code></td><td><code>array|WP_Error</code></td><td>Fetch a single group by ID</td></tr>
+            <tr><td><code>get(string $endpoint, array $params = [])</code></td><td><code>array|WP_Error</code></td><td>Generic GET to any endpoint under <code>/api/</code></td></tr>
+            <tr><td><code>post(string $endpoint, array $body = [])</code></td><td><code>array|WP_Error</code></td><td>Generic POST with JSON body</td></tr>
+            <tr><td><code>testConnection()</code></td><td><code>bool</code></td><td>Returns true if the API responds successfully</td></tr>
+            <tr><td><code>getLastResponse()</code></td><td><code>array</code></td><td>Raw WP HTTP response from the last request (for debugging)</td></tr>
+            </tbody>
+        </table>
+
+        <h3>Direct Usage</h3>
+        <pre><code><span class="c">// Via container — raw arrays</span>
+<span class="n">$client</span> = <span class="f">concordance</span>()-><span class="f">get</span>(<span class="t">ApiClient</span>::class);
+<span class="n">$result</span> = <span class="n">$client</span>-><span class="f">getGroups</span>();
+
+<span class="k">if</span> (<span class="f">is_wp_error</span>(<span class="n">$result</span>)) {
+    <span class="f">error_log</span>(<span class="n">$result</span>-><span class="f">get_error_message</span>());
+} <span class="k">else</span> {
+    <span class="k">foreach</span> (<span class="n">$result</span> <span class="k">as</span> <span class="n">$row</span>) {
+        <span class="f">echo</span> <span class="n">$row</span>[<span class="s">'groupName'</span>] . <span class="s">' — '</span> . <span class="n">$row</span>[<span class="s">'day'</span>] . <span class="s">' '</span> . <span class="n">$row</span>[<span class="s">'startTime'</span>];
+    }
+}
+
+<span class="c">// Via container — using the GroupListing model</span>
+<span class="n">$result</span> = <span class="f">concordance</span>()-><span class="f">get</span>(<span class="t">ApiCache</span>::class)-><span class="f">getGroups</span>();
+<span class="n">$groups</span> = <span class="t">GroupListing</span>::<span class="f">collectionFromResponse</span>(<span class="n">$result</span>);
+
+<span class="k">foreach</span> (<span class="n">$groups</span> <span class="k">as</span> <span class="n">$group</span>) {
+    <span class="f">echo</span> <span class="n">$group</span>-><span class="f">getGroupName</span>() . <span class="s">' — '</span> . <span class="n">$group</span>-><span class="f">getDay</span>() . <span class="s">' '</span> . <span class="n">$group</span>-><span class="f">getTimeRange</span>();
+}
+
+<span class="c">// Filter by intergroup</span>
+<span class="n">$result</span> = <span class="n">$client</span>-><span class="f">getGroups</span>([<span class="s">'intergroup'</span> => 1]);
+
+<span class="c">// Standalone (without container)</span>
+<span class="n">$client</span> = <span class="k">new</span> <span class="t">ApiClient</span>(<span class="s">'your-api-key-here'</span>);
+<span class="n">$group</span>  = <span class="n">$client</span>-><span class="f">getGroup</span>(22);</code></pre>
+    </section>
+
+    <!-- API Cache -->
+    <section id="api-cache">
+        <h2>ApiCache</h2>
+        <p>The <code>ApiCache</code> wraps <code>ApiClient</code> with WordPress transient caching. Cache keys are prefixed with <code>concordance_</code> and hashed by the query arguments.</p>
+
+        <table class="status-table">
+            <thead><tr><th>Method</th><th>Returns</th><th>Description</th></tr></thead>
+            <tbody>
+            <tr><td><code>getGroups(array $queryArgs = [], ?int $cacheTtl = null)</code></td><td><code>array|WP_Error</code></td><td>Cached group list. TTL falls back to the stored option.</td></tr>
+            <tr><td><code>getGroup(int|string $groupId, ?int $cacheTtl = null)</code></td><td><code>array|WP_Error</code></td><td>Cached single group lookup.</td></tr>
+            <tr><td><code>flush()</code></td><td><code>int</code></td><td>Deletes all Concordance transients. Returns count of deleted rows.</td></tr>
+            </tbody>
+        </table>
+
+        <div class="callout warning">
+            <span class="callout-icon">⚠️</span>
+            <div>Setting the cache TTL to <code>0</code> in the admin settings disables caching entirely — every REST request will hit the AAGBDB API directly. Use with caution on high-traffic sites.</div>
+        </div>
+    </section>
+
+    <!-- Authentication -->
+    <section id="authentication">
+        <h2>Authentication</h2>
+        <p>Concordance authenticates every API request by sending the API key in the <code>X-Api-Key</code> header:</p>
+
+        <pre><code>X-Api-Key: SOUTHMLDS2nvQN1X...
+
+<span class="c">// Headers sent with every request:</span>
+Accept: application/json
+Content-Type: application/json
+X-Api-Key: &lt;your-key&gt;</code></pre>
+
+        <p>The API key is sent in the <code>X-Api-Key</code> header. Populated from the <code>concordance_api_key</code> option in <code>wp_options</code>. The key is never exposed to the browser — the REST proxy endpoint allows JavaScript to fetch group data without the API key leaving the server.</p>
+
+        <div class="callout danger">
+            <span class="callout-icon">🚨</span>
+            <div><strong>Keep your API key secret.</strong> Never commit it to version control or expose it in client-side code. The admin settings page renders it as a password field.</div>
+        </div>
+    </section>
+
+    <!-- API Response Shape -->
+    <section id="api-response">
+        <h2>API Response Shape</h2>
+        <p>The <code>/api/groups/</code> endpoint returns a JSON array of group objects. Each object has the following shape:</p>
+
+        <pre><code>[
+  {
+    <span class="s">"id"</span>: 22,
+    <span class="s">"groupName"</span>: <span class="s">"BATH"</span>,
+    <span class="s">"town"</span>: <span class="s">"BATH"</span>,
+    <span class="s">"intergroupName"</span>: <span class="s">"WILTSHIRE INTERGROUP"</span>,
+    <span class="s">"intergroupId"</span>: 62,
+    <span class="s">"day"</span>: <span class="s">"Monday"</span>,
+    <span class="s">"startTime"</span>: <span class="s">"19:30"</span>,
+    <span class="s">"endTime"</span>: <span class="s">"20:30"</span>,
+    <span class="s">"lastUpdate"</span>: <span class="s">"2022-09-01T00:00:00"</span>
+  }
+]</code></pre>
+
+        <table class="status-table">
+            <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+            <tr><td><code>id</code></td><td><code>int</code></td><td>Unique group identifier</td></tr>
+            <tr><td><code>groupName</code></td><td><code>string</code></td><td>Name of the group</td></tr>
+            <tr><td><code>town</code></td><td><code>string</code></td><td>Town where the group meets</td></tr>
+            <tr><td><code>intergroupName</code></td><td><code>string</code></td><td>Name of the parent intergroup</td></tr>
+            <tr><td><code>intergroupId</code></td><td><code>int</code></td><td>ID of the parent intergroup (used for filtering)</td></tr>
+            <tr><td><code>day</code></td><td><code>string</code></td><td>Day of the week (e.g. "Monday")</td></tr>
+            <tr><td><code>startTime</code></td><td><code>string</code></td><td>Meeting start time (HH:MM)</td></tr>
+            <tr><td><code>endTime</code></td><td><code>string</code></td><td>Meeting end time (HH:MM)</td></tr>
+            <tr><td><code>lastUpdate</code></td><td><code>string</code></td><td>ISO 8601 datetime of last update</td></tr>
+            </tbody>
+        </table>
+
+        <h3>Filtering</h3>
+        <p>The API returns all groups across all intergroups. Filtering by intergroup is done client-side using the <code>intergroupId</code> field on the <code>GroupListing</code> model:</p>
+
+        <pre><code><span class="c">// Fetch all groups, then filter by intergroup ID</span>
+<span class="n">$result</span> = <span class="f">concordance</span>()-><span class="f">get</span>(<span class="t">ApiCache</span>::class)-><span class="f">getGroups</span>();
+<span class="n">$groups</span> = <span class="t">GroupListing</span>::<span class="f">collectionFromResponse</span>(<span class="n">$result</span>);
+
+<span class="n">$filtered</span> = <span class="f">array_filter</span>(
+    <span class="n">$groups</span>,
+    <span class="k">static fn</span>(<span class="t">GroupListing</span> <span class="n">$g</span>) => <span class="n">$g</span>-><span class="f">getIntergroupId</span>() === 1
+);</code></pre>
+
+        <p>The WP-CLI <code>list</code> command supports this via the <code>--intergroup</code> flag: <code>wp concordance list --intergroup=1</code>.</p>
+    </section>
+
+    <!-- GroupListing Model -->
+    <section id="group-listing">
+        <h2>GroupListing</h2>
+        <p>The <code>GroupListing</code> class is an immutable value object that represents a single group from the API. It lives at <code>src/Models/GroupListing.php</code> and is hydrated from the raw API array via static factory methods.</p>
+
+        <h3>Properties &amp; Getters</h3>
+        <table class="status-table">
+            <thead><tr><th>Getter</th><th>Returns</th><th>API Field</th></tr></thead>
+            <tbody>
+            <tr><td><code>getId()</code></td><td><code>int</code></td><td><code>id</code></td></tr>
+            <tr><td><code>getGroupName()</code></td><td><code>string</code></td><td><code>groupName</code></td></tr>
+            <tr><td><code>getTown()</code></td><td><code>string</code></td><td><code>town</code></td></tr>
+            <tr><td><code>getIntergroupName()</code></td><td><code>string</code></td><td><code>intergroupName</code></td></tr>
+            <tr><td><code>getIntergroupId()</code></td><td><code>int</code></td><td><code>intergroupId</code></td></tr>
+            <tr><td><code>getDay()</code></td><td><code>string</code></td><td><code>day</code></td></tr>
+            <tr><td><code>getStartTime()</code></td><td><code>string</code></td><td><code>startTime</code></td></tr>
+            <tr><td><code>getEndTime()</code></td><td><code>string</code></td><td><code>endTime</code></td></tr>
+            <tr><td><code>getLastUpdate()</code></td><td><code>string</code></td><td><code>lastUpdate</code></td></tr>
+            </tbody>
+        </table>
+
+        <h3>Display Helpers</h3>
+        <table class="status-table">
+            <thead><tr><th>Method</th><th>Returns</th><th>Description</th></tr></thead>
+            <tbody>
+            <tr><td><code>getTimeRange()</code></td><td><code>string</code></td><td>Formatted range, e.g. "19:30 – 20:30"</td></tr>
+            <tr><td><code>getFormattedLastUpdate()</code></td><td><code>string</code></td><td>Date in d/m/Y format</td></tr>
+            <tr><td><code>hasTown()</code></td><td><code>bool</code></td><td>True if town is not empty</td></tr>
+            <tr><td><code>isValid()</code></td><td><code>bool</code></td><td>True if groupName is not empty</td></tr>
+            </tbody>
+        </table>
+
+        <h3>Sorting</h3>
+        <table class="status-table">
+            <thead><tr><th>Method</th><th>Returns</th><th>Description</th></tr></thead>
+            <tbody>
+            <tr><td><code>GroupListing::sort(array &amp;$groups, string $sortSpec)</code></td><td><code>void</code></td><td>Static. Sorts a collection in place by comma-separated fields: <code>day</code>, <code>time</code>, <code>name</code>.</td></tr>
+            </tbody>
+        </table>
+
+        <pre><code><span class="c">// Sort by day, then time within each day</span>
+<span class="t">GroupListing</span>::<span class="f">sort</span>(<span class="n">$groups</span>, <span class="s">'day,time'</span>);
+
+<span class="c">// Sort alphabetically by name</span>
+<span class="t">GroupListing</span>::<span class="f">sort</span>(<span class="n">$groups</span>, <span class="s">'name'</span>);
+
+<span class="c">// All three combined</span>
+<span class="t">GroupListing</span>::<span class="f">sort</span>(<span class="n">$groups</span>, <span class="s">'day,time,name'</span>);</code></pre>
+
+        <h3>Raw Data Access</h3>
+        <table class="status-table">
+            <thead><tr><th>Method</th><th>Returns</th><th>Description</th></tr></thead>
+            <tbody>
+            <tr><td><code>getRaw()</code></td><td><code>array</code></td><td>Original API array (all fields, unmodified)</td></tr>
+            <tr><td><code>getRawValue(string $key, mixed $default = null)</code></td><td><code>mixed</code></td><td>Single value from raw data by key</td></tr>
+            </tbody>
+        </table>
+
+        <h3>Serialisation</h3>
+        <table class="status-table">
+            <thead><tr><th>Method</th><th>Returns</th><th>Description</th></tr></thead>
+            <tbody>
+            <tr><td><code>toArray()</code></td><td><code>array</code></td><td>Associative array matching the API field names</td></tr>
+            <tr><td><code>jsonSerialize()</code></td><td><code>array</code></td><td>Implements <code>JsonSerializable</code> (calls <code>toArray</code>)</td></tr>
+            <tr><td><code>__toString()</code></td><td><code>string</code></td><td>Returns the group name</td></tr>
+            </tbody>
+        </table>
+
+        <h3>Static Factories</h3>
+        <pre><code><span class="k">use</span> <span class="t">Concordance\Models\GroupListing</span>;
+
+<span class="c">// Single group from an API array</span>
+<span class="n">$group</span> = <span class="t">GroupListing</span>::<span class="f">fromArray</span>(<span class="n">$apiData</span>);
+<span class="f">echo</span> <span class="n">$group</span>-><span class="f">getGroupName</span>();   <span class="c">// "GROUP NAME"</span>
+<span class="f">echo</span> <span class="n">$group</span>-><span class="f">getTimeRange</span>();   <span class="c">// "19:30 – 20:30"</span>
+<span class="f">echo</span> <span class="n">$group</span>-><span class="f">getTown</span>();        <span class="c">// "GROUP NAME"</span>
+
+<span class="c">// Collection from the full API response</span>
+<span class="n">$response</span> = <span class="f">concordance</span>()-><span class="f">get</span>(<span class="t">ApiCache</span>::class)-><span class="f">getGroups</span>();
+<span class="n">$groups</span>   = <span class="t">GroupListing</span>::<span class="f">collectionFromResponse</span>(<span class="n">$response</span>);
+
+<span class="k">foreach</span> (<span class="n">$groups</span> <span class="k">as</span> <span class="n">$group</span>) {
+    <span class="f">echo</span> <span class="n">$group</span>-><span class="f">getGroupName</span>() . <span class="s">' — '</span> . <span class="n">$group</span>-><span class="f">getDay</span>() . <span class="s">' '</span> . <span class="n">$group</span>-><span class="f">getTimeRange</span>();
+}</code></pre>
+
+        <div class="callout info">
+            <span class="callout-icon">💡</span>
+            <div>If the API adds new fields in the future, they are always available via <code>getRaw()</code> and <code>getRawValue()</code> without needing a model update. The WP-CLI commands use <code>getRaw()</code> for output so all API columns appear automatically.</div>
+        </div>
+    </section>
+
+    <!-- REST API Proxy -->
+    <section id="rest-api">
+        <h2>REST API Proxy</h2>
+        <p>Concordance exposes the AAGBDB data through two WordPress REST endpoints. These act as a proxy, keeping the API key server-side while allowing JavaScript/AJAX access.</p>
+
+        <table class="status-table">
+            <thead><tr><th>Endpoint</th><th>Method</th><th>Description</th></tr></thead>
+            <tbody>
+            <tr><td><code>/wp-json/concordance/v1/groups</code></td><td>GET</td><td>Fetch all groups (cached). Passes query params through.</td></tr>
+            <tr><td><code>/wp-json/concordance/v1/groups/{id}</code></td><td>GET</td><td>Fetch a single group by ID (cached).</td></tr>
+            </tbody>
+        </table>
+
+        <div class="callout info">
+            <span class="callout-icon">💡</span>
+            <div>Both endpoints require the user to have the <code>read</code> capability (i.e. be logged in). To make them public, modify the <code>permission_callback</code> in <code>GroupListingManager::registerRestRoutes()</code> to return <code>true</code>.</div>
+        </div>
+
+        <h3>Example (JavaScript)</h3>
+        <pre><code><span class="k">const</span> <span class="n">response</span> = <span class="k">await</span> <span class="f">fetch</span>(<span class="s">'/wp-json/concordance/v1/groups'</span>, {
+    <span class="n">headers</span>: { <span class="s">'X-WP-Nonce'</span>: wpApiSettings.nonce }
+});
+<span class="k">const</span> <span class="n">groups</span> = <span class="k">await</span> <span class="n">response</span>.<span class="f">json</span>();</code></pre>
+    </section>
+
+    <!-- Admin Settings -->
+    <section id="admin-settings">
+        <h2>Admin Settings</h2>
+        <p>The settings page is available at <strong>Settings → Concordance API</strong> and provides three sections:</p>
+
+        <div class="card">
+            <h3>API Configuration</h3>
+            <p>Two fields: the API Key (rendered as a password input) and the Cache TTL (in seconds, step 60). Both use the WordPress Settings API and are saved to <code>wp_options</code>.</p>
+            <p style="margin-bottom:0;">The API key is sanitized with <code>sanitize_text_field()</code>; the TTL is sanitized with <code>absint()</code>.</p>
+        </div>
+
+        <div class="card">
+            <h3>Connection Test</h3>
+            <p style="margin-bottom:0;">A button that triggers a live API call (nonce-protected). On success, it shows the number of groups returned. On failure, it shows the error message. This bypasses the cache — it always hits the AAGBDB API directly.</p>
+        </div>
+
+        <div class="card">
+            <h3>Usage Reference</h3>
+            <p style="margin-bottom:0;">A quick-reference table showing REST endpoints, PHP container access, and all WP-CLI commands.</p>
+        </div>
+    </section>
+
+    <!-- Directory Structure -->
+    <section id="directory-structure">
+        <h2>Directory Structure</h2>
+        <pre><code>concordance/
+├── Concordance.php              <span class="c"># Main plugin file, autoloader, boot sequence</span>
+├── composer.json                <span class="c"># PSR-4 autoload, psr/container dependency</span>
+├── build.php                    <span class="c"># Cross-platform ZIP build script</span>
+├── LICENSE                      <span class="c"># MIT (Modified)</span>
+├── .gitignore
+└── src/
+    ├── Plugin.php               <span class="c"># Container bootstrap, service registration, init</span>
+    ├── Core/
+    │   └── Container.php        <span class="c"># PSR-11 container + NotFoundException + ContainerException</span>
+    ├── Api/
+    │   ├── ApiClient.php        <span class="c"># HTTP client for AAGBDB Groups API</span>
+    │   └── ApiCache.php         <span class="c"># WordPress transient caching layer</span>
+    ├── Common/
+    │   └── ConcordanceConfiguration.php  <span class="c"># Constants: URLs, option keys, defaults</span>
+    ├── Managers/
+    │   └── GroupListingManager.php    <span class="c"># REST route registration</span>
+    ├── Models/
+    │   └── GroupListing.php     <span class="c"># Immutable value object for AAGBDB group data</span>
+    ├── Admin/
+    │   └── SettingsAdmin.php    <span class="c"># Admin settings page + connection tester</span>
+    └── Cli/
+        └── ConcordanceCli.php   <span class="c"># WP-CLI commands: list, get, test, flush-cache, config</span></code></pre>
+    </section>
+
+    <!-- Build -->
+    <section id="build">
+        <h2>Building for Distribution</h2>
+        <p>Concordance includes a cross-platform build script that packages the plugin into a ZIP archive:</p>
+
+        <pre><code><span class="c"># Production build (excludes dev files, keeps vendor/)</span>
+php build.php build:production
+
+<span class="c"># Development build (includes tests and configs)</span>
+php build.php build:dev
+
+<span class="c"># Clean build directory</span>
+php build.php clean
+
+<span class="c"># Or use Composer scripts</span>
+composer build
+composer build:dev
+composer build:clean</code></pre>
+
+        <p>The production archive is written to <code>build/concordance-production-1.0.0.zip</code> and includes the <code>vendor/</code> directory (required for <code>psr/container</code>), but strips tests, IDE files, documentation, and build tools.</p>
+    </section>
+
+    <!-- Error Handling -->
+    <section id="error-handling">
+        <h2>Error Handling</h2>
+
+        <div class="card">
+            <h3>API Errors — <code>WP_Error</code></h3>
+            <p>All <code>ApiClient</code> methods return <code>array|WP_Error</code>. Non-2xx HTTP responses produce a <code>WP_Error</code> with code <code>concordance_api_error</code>, including the HTTP status code and raw response body in the error data.</p>
+            <p style="margin-bottom:0;">JSON parse failures produce <code>concordance_json_error</code>. PHP exceptions produce <code>concordance_exception</code>. All errors are logged with <code>error_log()</code>.</p>
+        </div>
+
+        <div class="card">
+            <h3>Container — <code>NotFoundException</code></h3>
+            <p style="margin-bottom:0;">Thrown when <code>Container::get()</code> is called with a service ID that has no registered factory. The message includes the service class name.</p>
+        </div>
+
+        <div class="card">
+            <h3>Container — <code>ContainerException</code></h3>
+            <p style="margin-bottom:0;">Thrown when a registered factory throws during resolution. Wraps the original exception with the service ID in the message.</p>
+        </div>
+
+        <div class="card">
+            <h3>RuntimeException — "Plugin not initialized"</h3>
+            <p style="margin-bottom:0;">Thrown by <code>Plugin::getContainer()</code> or <code>concordance()</code> when called before <code>plugins_loaded</code> has fired. Ensure you only access the container after WordPress has loaded plugins.</p>
+        </div>
+
+        <p>All exceptions during initialisation are caught, logged to the WordPress error log with full stack traces, and displayed as admin notices.</p>
+    </section>
+
+    <!-- Troubleshooting -->
+    <section id="troubleshooting">
+        <h2>Troubleshooting</h2>
+
+        <div class="card">
+            <h3>HTTP 401 from the API</h3>
+            <p style="margin-bottom:0;">Your API key is missing or invalid. Go to <strong>Settings → Concordance API</strong>, re-enter the key, and use the "Test API Connection" button to verify.</p>
+        </div>
+
+        <div class="card">
+            <h3>"Plugin not initialized" when calling concordance()</h3>
+            <p style="margin-bottom:0;">You're accessing the container too early. Move your code to run on or after <code>plugins_loaded</code> at priority 10 or later, or use the <code>concordance/loaded</code> hook.</p>
+        </div>
+
+        <div class="card">
+            <h3>Stale data after API changes</h3>
+            <p style="margin-bottom:0;">Data is cached in WordPress transients. Either wait for the TTL to expire, run <code>wp concordance flush-cache</code>, or set the cache TTL to 0 temporarily in the settings.</p>
+        </div>
+
+        <div class="card">
+            <h3>REST endpoints return 401</h3>
+            <p style="margin-bottom:0;">The REST proxy requires the <code>read</code> capability (logged-in users). Send a valid <code>X-WP-Nonce</code> header, or modify the permission callback in <code>GroupListingManager</code> to allow public access.</p>
+        </div>
+
+        <div class="card">
+            <h3>Class not found errors after installation</h3>
+            <p style="margin-bottom:0;">Run <code>composer install</code> in the plugin directory. The <code>psr/container</code> package must be present in <code>vendor/</code> for the PSR-11 interfaces to be available.</p>
+        </div>
+    </section>
+
+    <!-- FAQ -->
+    <section id="faq">
+        <h2>FAQ</h2>
+
+        <div class="card">
+            <h3>Does Concordance require Unity or any other plugin?</h3>
+            <p style="margin-bottom:0;">No. Concordance is fully standalone. It ships its own PSR-11 container and has no WordPress plugin dependencies. Its only Composer dependency is <code>psr/container ^2.0</code>.</p>
+        </div>
+
+        <div class="card">
+            <h3>Are services singletons?</h3>
+            <p style="margin-bottom:0;">Yes. The container calls each factory only once. After that, the same instance is returned for every <code>get()</code> call.</p>
+        </div>
+
+        <div class="card">
+            <h3>What's the concordance() helper function?</h3>
+            <p style="margin-bottom:0;">A global shorthand for <code>Plugin::getContainer()</code>. It returns the PSR-11 container so you can resolve services from anywhere after <code>plugins_loaded</code>.</p>
+        </div>
+
+        <div class="card">
+            <h3>Can I use the ApiClient without WordPress?</h3>
+            <p style="margin-bottom:0;">Not directly — it depends on <code>wp_remote_request</code> and related WordPress HTTP functions. However, the class is cleanly structured and could be adapted to use Guzzle or any other HTTP client with minimal changes.</p>
+        </div>
+
+        <div class="card">
+            <h3>How do I change the authentication method?</h3>
+            <p style="margin-bottom:0;">Edit <code>ApiClient::buildHeaders()</code>. The default sends <code>X-Api-Key: &lt;key&gt;</code>. If your API uses a different scheme (e.g. <code>Authorization: Bearer</code> or a query parameter), change the header construction there.</p>
+        </div>
+
+        <div class="card">
+            <h3>Can I add more API endpoints?</h3>
+            <p style="margin-bottom:0;">Yes. Use <code>ApiClient::get()</code> or <code>ApiClient::post()</code> with any path relative to the base URL. For example: <code>$client->get('/meetings/')</code>. For caching, extend <code>ApiCache</code> with a similar pattern to the existing <code>getGroups()</code> method.</p>
+        </div>
+
+        <div class="card" style="margin-bottom:0;">
+            <h3>How does the build script work?</h3>
+            <p style="margin-bottom:0;">The <code>build.php</code> script creates a ZIP archive of the plugin, excluding development files (tests, IDE configs, docs). It automatically runs <code>composer install --no-dev</code> if the vendor directory is missing. Use <code>php build.php --help</code> for full usage details.</p>
+        </div>
+    </section>
+
+</main>
+
+<script>
+    function toggleNav() {
+        document.getElementById('sidebar').classList.toggle('open');
+        document.querySelector('.overlay').classList.toggle('visible');
+    }
+    const sections = document.querySelectorAll('section[id]');
+    const navLinks = document.querySelectorAll('.nav-link');
+    function updateActiveLink() {
+        let current = '';
+        const scrollY = window.scrollY + 100;
+        sections.forEach(s => { if (s.offsetTop <= scrollY) current = s.getAttribute('id'); });
+        navLinks.forEach(l => {
+            l.classList.remove('active');
+            if (l.getAttribute('href') === '#' + current) l.classList.add('active');
+        });
+    }
+    window.addEventListener('scroll', updateActiveLink, { passive: true });
+    document.querySelectorAll('.nav-link').forEach(l => {
+        l.addEventListener('click', () => {
+            document.getElementById('sidebar').classList.remove('open');
+            document.querySelector('.overlay').classList.remove('visible');
+        });
+    });
+</script>
+</body>
+</html>
