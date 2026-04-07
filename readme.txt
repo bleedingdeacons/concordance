@@ -12,7 +12,7 @@ API client for the AAGBDB Groups API. Standalone plugin with PSR-11 container.
 
 == Description ==
 
-Concordance provides a clean interface for consuming the [AAGBDB](https://aagbdb.org.uk) Groups API from within WordPress. It exposes group listing data through a REST proxy, an admin dashboard widget, WP-CLI commands, and a PHP service container — so other plugins or themes can access the data however makes sense for the project.
+Concordance provides a clean interface for consuming the [AAGBDB](https://aagbdb.org.uk) Groups API from within WordPress. It exposes group listing data through a REST proxy, an admin dashboard widget, WP-CLI commands.
 
 **Key features:**
 
@@ -84,21 +84,6 @@ Yes. Both REST endpoints require the requesting user to have the `read` capabili
 = What happens on deactivation? =
 
 All transient caches (prefixed with `concordance_`) are removed. Stored options (API key, settings) are preserved so they persist through deactivate/reactivate cycles.
-
-== Screenshots ==
-
-1. Settings page — configure API key, base URL, cache TTL, and request timeout with a one-click connection test.
-2. Dashboard widget — group listings displayed on the WordPress admin dashboard, sorted by day and time.
-
-== Changelog ==
-
-= 1.4.7 =
-* Current stable release.
-
-== Upgrade Notice ==
-
-= 1.4.7 =
-Latest stable release of Concordance.
 
 == Configuration Reference ==
 
