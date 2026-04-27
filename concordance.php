@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Plugin Name: Concordance
  * Description: API client for the AAGBDB Groups API. Standalone plugin with PSR-11 container.
- * Version: 1.5.1
+ * Version: 1.6.0
  * Requires at least: 6.0
  * Requires PHP: 8.1
  * Author: The Bleeding Deacons

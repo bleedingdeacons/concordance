@@ -156,6 +156,13 @@ class SettingsAdmin
             'default'           => ConcordanceConfiguration::DEFAULT_REQUEST_TIMEOUT,
         ]);
 
+        register_setting('concordance_options', ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS, [
+            'type'              => 'array',
+            'sanitize_callback' => [$this, 'sanitizeDashboardFields'],
+            'default'           => ConcordanceConfiguration::DEFAULT_DASHBOARD_FIELDS,
+        ]);
+
+        // ── API Configuration section ───────────────────────────────
         add_settings_section(
             'concordance_main_section',
             esc_html__('API Configuration', 'concordance'),
@@ -195,6 +202,27 @@ class SettingsAdmin
             [$this, 'renderRequestTimeoutField'],
             'concordance',
             'concordance_main_section'
+        );
+
+        // ── Dashboard Display section ───────────────────────────────
+        add_settings_section(
+            'concordance_dashboard_section',
+            esc_html__('Dashboard Display', 'concordance'),
+            function () {
+                echo '<p>' . esc_html__(
+                    'Choose which fields appear on each group card in the WordPress dashboard widget. The group name is always shown.',
+                    'concordance'
+                ) . '</p>';
+            },
+            'concordance'
+        );
+
+        add_settings_field(
+            ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS,
+            esc_html__('Visible Fields', 'concordance'),
+            [$this, 'renderDashboardFieldsField'],
+            'concordance',
+            'concordance_dashboard_section'
         );
     }
 
@@ -273,6 +301,130 @@ class SettingsAdmin
         $val = get_option(ConcordanceConfiguration::OPTION_REQUEST_TIMEOUT, ConcordanceConfiguration::DEFAULT_REQUEST_TIMEOUT);
         echo '<input type="number" name="' . esc_attr(ConcordanceConfiguration::OPTION_REQUEST_TIMEOUT) . '" value="' . esc_attr((string) $val) . '" min="1" step="1" class="small-text" />';
         echo '<p class="description">' . esc_html__('HTTP request timeout in seconds.', 'concordance') . '</p>';
+    }
+
+    /**
+     * Render the Dashboard Fields checkbox grid.
+     *
+     * @return void
+     */
+    public function renderDashboardFieldsField(): void
+    {
+        $stored   = get_option(
+            ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS,
+            ConcordanceConfiguration::DEFAULT_DASHBOARD_FIELDS
+        );
+        $selected = is_array($stored) ? $stored : ConcordanceConfiguration::DEFAULT_DASHBOARD_FIELDS;
+        $option   = ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS;
+
+        echo '<fieldset class="concordance-fields-fieldset">';
+        echo '<legend class="screen-reader-text">' . esc_html__('Dashboard fields', 'concordance') . '</legend>';
+
+        // Hidden empty value so unchecking ALL boxes still submits the option
+        // (otherwise unchecked checkboxes are absent from POST and the
+        // sanitize callback never fires).
+        echo '<input type="hidden" name="' . esc_attr($option) . '[]" value="" />';
+
+        echo '<div class="concordance-fields-grid">';
+        foreach (ConcordanceConfiguration::DASHBOARD_FIELDS as $key => $label) {
+            $isChecked = in_array($key, $selected, true);
+            $id        = 'concordance-field-' . esc_attr($key);
+
+            echo '<label for="' . esc_attr($id) . '" class="concordance-field-label">';
+            echo '<input type="checkbox"'
+                . ' id="' . esc_attr($id) . '"'
+                . ' name="' . esc_attr($option) . '[]"'
+                . ' value="' . esc_attr($key) . '"'
+                . ($isChecked ? ' checked' : '')
+                . ' />';
+            echo ' ' . esc_html($label);
+            echo '</label>';
+        }
+        echo '</div>';
+
+        echo '<p>';
+        echo '<button type="button" class="button button-secondary" data-concordance-fields-action="all">'
+            . esc_html__('Select all', 'concordance') . '</button> ';
+        echo '<button type="button" class="button button-secondary" data-concordance-fields-action="none">'
+            . esc_html__('Select none', 'concordance') . '</button> ';
+        echo '<button type="button" class="button button-secondary" data-concordance-fields-action="defaults">'
+            . esc_html__('Restore defaults', 'concordance') . '</button>';
+        echo '</p>';
+
+        echo '</fieldset>';
+
+        // A small bit of inline CSS + JS to make the grid presentable and the
+        // helper buttons functional. Kept inline (rather than enqueued) to
+        // mirror the existing dashboard widget approach.
+        ?>
+        <style>
+            .concordance-fields-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+                gap: 6px 16px;
+                margin: 8px 0 12px;
+                max-width: 760px;
+            }
+            .concordance-field-label {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 13px;
+                line-height: 1.4;
+            }
+        </style>
+        <script>
+        (function () {
+            var fieldset = document.querySelector('.concordance-fields-fieldset');
+            if (!fieldset) { return; }
+            var defaults = <?php echo wp_json_encode(array_values(ConcordanceConfiguration::DEFAULT_DASHBOARD_FIELDS)); ?>;
+            var checkboxes = fieldset.querySelectorAll('input[type="checkbox"]');
+
+            fieldset.addEventListener('click', function (e) {
+                var btn = e.target.closest('[data-concordance-fields-action]');
+                if (!btn) { return; }
+                var action = btn.getAttribute('data-concordance-fields-action');
+                checkboxes.forEach(function (cb) {
+                    if (action === 'all') {
+                        cb.checked = true;
+                    } else if (action === 'none') {
+                        cb.checked = false;
+                    } else if (action === 'defaults') {
+                        cb.checked = defaults.indexOf(cb.value) !== -1;
+                    }
+                });
+            });
+        })();
+        </script>
+        <?php
+    }
+
+    /**
+     * Sanitize the dashboard fields setting.
+     *
+     * Accepts only keys present in the DASHBOARD_FIELDS whitelist and
+     * returns them in the canonical whitelist order. An all-empty submission
+     * (e.g. the user unchecked everything) is honoured and stored as [].
+     *
+     * @param mixed $value The raw form input.
+     * @return string[]    Sanitised list of field keys.
+     */
+    public function sanitizeDashboardFields(mixed $value): array
+    {
+        if (!is_array($value)) {
+            return [];
+        }
+
+        $allowed = array_keys(ConcordanceConfiguration::DASHBOARD_FIELDS);
+        $clean   = [];
+
+        foreach ($allowed as $key) {
+            if (in_array($key, $value, true)) {
+                $clean[] = $key;
+            }
+        }
+
+        return $clean;
     }
 
     /**

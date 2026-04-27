@@ -9,6 +9,7 @@ if (!defined('ABSPATH')) {
 }
 
 use Concordance\Api\ApiCache;
+use Concordance\Common\ConcordanceConfiguration;
 use Concordance\Models\GroupListing;
 
 use function add_action;
@@ -16,6 +17,7 @@ use function esc_attr;
 use function esc_html;
 use function esc_url;
 use function get_current_screen;
+use function get_option;
 use function is_wp_error;
 use function wp_add_dashboard_widget;
 
@@ -25,21 +27,13 @@ use function wp_add_dashboard_widget;
  * Adds a dashboard panel listing all groups from the AAGBDB API
  * via the Concordance plugin's ApiCache and GroupListing model.
  *
- * Renders from the raw API data (via GroupListing::getRaw()) so
- * every field the API returns is displayed regardless of how the
- * model maps it.
+ * Which fields appear on each card is controlled by the
+ * concordance_dashboard_fields option, configured on the Concordance
+ * settings page. The group name is always shown.
  */
 class GroupListingDashboard
 {
     private ApiCache $apiCache;
-
-    /**
-     * Fields to skip when rendering the detail grid.
-     * These are either shown in the card header or are internal.
-     */
-    private const HEADER_FIELDS = [
-        'id', 'groupName', 'intergroupId', 'intergroupName',
-    ];
 
     /**
      * Fields that look like URLs and should be rendered as links.
@@ -108,6 +102,8 @@ class GroupListingDashboard
         // Sort by day, then time, then name
         GroupListing::sort($groups, 'day,time,name');
 
+        $visibleFields = $this->getVisibleFields();
+
         echo '<div class="gl-dashboard-widget">';
 
         // Summary
@@ -116,24 +112,49 @@ class GroupListingDashboard
         echo '</div>';
 
         foreach ($groups as $group) {
-            $this->renderGroupCard($group);
+            $this->renderGroupCard($group, $visibleFields);
         }
 
         echo '</div>';
     }
 
     /**
-     * Render a single group card from the raw API data.
+     * Resolve the list of fields to display, filtered through the
+     * DASHBOARD_FIELDS whitelist and ordered by it.
      *
-     * The card header shows the group name (resolved from common key
-     * names). The body renders every other field the API returned as
-     * a label/value pair.
-     *
-     * @param GroupListing $group Group listing model
+     * @return array<string, string> Field key => human label
      */
-    private function renderGroupCard(GroupListing $group): void
+    private function getVisibleFields(): array
     {
-        $raw = $group->getRaw();
+        $stored = get_option(
+            ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS,
+            ConcordanceConfiguration::DEFAULT_DASHBOARD_FIELDS
+        );
+        $selected = is_array($stored) ? $stored : ConcordanceConfiguration::DEFAULT_DASHBOARD_FIELDS;
+
+        $visible = [];
+        foreach (ConcordanceConfiguration::DASHBOARD_FIELDS as $key => $label) {
+            if (in_array($key, $selected, true)) {
+                $visible[$key] = $label;
+            }
+        }
+
+        return $visible;
+    }
+
+    /**
+     * Render a single group card.
+     *
+     * The card header always shows the group name. The body renders only
+     * the fields that have been enabled in the settings page, in the order
+     * defined by ConcordanceConfiguration::DASHBOARD_FIELDS.
+     *
+     * @param GroupListing $group         Group listing model
+     * @param array<string, string> $visibleFields key => human label
+     */
+    private function renderGroupCard(GroupListing $group, array $visibleFields): void
+    {
+        $raw  = $group->getRaw();
         $name = $this->resolveName($raw);
 
         echo '<div class="gl-card">';
@@ -145,8 +166,8 @@ class GroupListingDashboard
         echo '</div>';
         echo '</div>';
 
-        // --- Body: render every field except those used in the header ---
-        $fields = $this->getDisplayFields($raw);
+        // --- Body ---
+        $fields = $this->getDisplayFields($raw, $visibleFields);
 
         if (!empty($fields)) {
             echo '<div class="gl-card-content">';
@@ -158,7 +179,7 @@ class GroupListingDashboard
                 echo '<div class="' . esc_attr($fieldClass) . '">';
                 echo '<div class="gl-field-label">' . esc_html($label) . '</div>';
                 echo '<div class="gl-field-value">';
-                echo esc_html($this->renderFieldValue($label, $value));
+                echo $this->renderFieldValue($label, $value);
                 echo '</div>';
                 echo '</div>';
             }
@@ -181,29 +202,33 @@ class GroupListingDashboard
     }
 
     /**
-     * Build a filtered, human-labelled array of fields to display.
+     * Build a human-labelled array of fields to display, filtered to the
+     * user's selected visible fields.
      *
-     * Skips header fields, empty values, and nested arrays/objects.
+     * Empty values, nested arrays/objects, and boolean false are skipped
+     * so an enabled-but-empty field doesn't render an empty row.
      *
-     * @param array $raw Raw API data
-     * @return array<string, string> Label => value pairs
+     * @param array<string, mixed>  $raw           Raw API data
+     * @param array<string, string> $visibleFields key => label, in display order
+     * @return array<string, string>               Label => display value
      */
-    private function getDisplayFields(array $raw): array
+    private function getDisplayFields(array $raw, array $visibleFields): array
     {
         $fields = [];
 
-        foreach ($raw as $key => $value) {
-            // Skip header fields
-            if (in_array($key, self::HEADER_FIELDS, true)) {
+        foreach ($visibleFields as $key => $label) {
+            if (!array_key_exists($key, $raw)) {
                 continue;
             }
+
+            $value = $raw[$key];
 
             // Skip empty, null, nested arrays/objects
             if ($value === null || $value === '' || is_array($value) || is_object($value)) {
                 continue;
             }
 
-            // Skip boolean false
+            // Skip boolean false (e.g. an unset wheelchair flag)
             if ($value === false) {
                 continue;
             }
@@ -213,7 +238,6 @@ class GroupListingDashboard
                 $value = 'Yes';
             }
 
-            $label = $this->humaniseKey($key);
             $fields[$label] = (string) $value;
         }
 
@@ -240,25 +264,6 @@ class GroupListingDashboard
         }
 
         return esc_html($value);
-    }
-
-    /**
-     * Convert a snake_case or camelCase API key to a human-readable label.
-     *
-     * Examples: "start_time" → "Start Time", "postCode" → "Post Code"
-     *
-     * @param string $key API field key
-     * @return string Human-readable label
-     */
-    private function humaniseKey(string $key): string
-    {
-        // Insert space before capitals in camelCase
-        $key = (string) preg_replace('/([a-z])([A-Z])/', '$1 $2', $key);
-
-        // Replace underscores and hyphens with spaces
-        $key = str_replace(['_', '-'], ' ', $key);
-
-        return ucwords(trim($key));
     }
 
     /**
