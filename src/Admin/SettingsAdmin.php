@@ -8,6 +8,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+use Concordance\Api\ApiCache;
 use Concordance\Api\ApiClient;
 use Concordance\Common\ConcordanceConfiguration;
 use Concordance\Common\Encryption;
@@ -43,14 +44,20 @@ class SettingsAdmin
 {
     private ApiClient $client;
     private Encryption $encryption;
+    private ?ApiCache $cache;
 
-    public function __construct(ApiClient $client, ?Encryption $encryption = null)
-    {
+    public function __construct(
+        ApiClient $client,
+        ?Encryption $encryption = null,
+        ?ApiCache $cache = null
+    ) {
         $this->client     = $client;
         $this->encryption = $encryption ?? new Encryption();
+        $this->cache      = $cache;
 
         add_action('admin_menu', [$this, 'registerMenu']);
         add_action('admin_init', [$this, 'registerSettings']);
+        add_action('admin_init', [$this, 'handleCacheFlush']);
         add_action('admin_footer', [$this, 'addDocsNewTabScript']);
     }
 
@@ -428,6 +435,59 @@ class SettingsAdmin
     }
 
     /**
+     * Handle the "Flush Cache" GET action.
+     *
+     * Runs on admin_init so the redirect happens before any output is sent.
+     * Verifies the nonce and the user's capability, calls ApiCache::flush(),
+     * then redirects back to the settings page with a success/error flag in
+     * the query string. The flag is rendered by renderCacheFlushNotices().
+     *
+     * @return void
+     */
+    public function handleCacheFlush(): void
+    {
+        if (!isset($_GET['concordance_flush_cache'])) {
+            return;
+        }
+
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+
+        $nonce = isset($_GET['_wpnonce']) ? sanitize_text_field(wp_unslash($_GET['_wpnonce'])) : '';
+        if (!wp_verify_nonce($nonce, 'concordance_flush_cache_nonce')) {
+            wp_safe_redirect(add_query_arg(
+                ['concordance_flushed' => 'invalid'],
+                admin_url('admin.php?page=concordance')
+            ));
+            exit;
+        }
+
+        if ($this->cache === null) {
+            wp_safe_redirect(add_query_arg(
+                ['concordance_flushed' => 'unavailable'],
+                admin_url('admin.php?page=concordance')
+            ));
+            exit;
+        }
+
+        try {
+            $deleted = $this->cache->flush();
+            wp_safe_redirect(add_query_arg(
+                ['concordance_flushed' => (string) $deleted],
+                admin_url('admin.php?page=concordance')
+            ));
+            exit;
+        } catch (Exception $e) {
+            wp_safe_redirect(add_query_arg(
+                ['concordance_flushed' => 'error'],
+                admin_url('admin.php?page=concordance')
+            ));
+            exit;
+        }
+    }
+
+    /**
      * Render the full settings page.
      *
      * @return void
@@ -441,6 +501,8 @@ class SettingsAdmin
         <div class="wrap">
             <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
 
+            <?php $this->renderCacheFlushNotices(); ?>
+
             <form action="options.php" method="post">
                 <?php
                 settings_fields('concordance_options');
@@ -450,6 +512,10 @@ class SettingsAdmin
             </form>
 
             <hr />
+            <h2><?php esc_html_e('Cache Maintenance', 'concordance'); ?></h2>
+            <?php $this->renderCacheMaintenance(); ?>
+
+            <hr />
             <h2><?php esc_html_e('Connection Test', 'concordance'); ?></h2>
             <?php $this->renderConnectionTest(); ?>
 
@@ -457,6 +523,83 @@ class SettingsAdmin
             <h2><?php esc_html_e('Usage', 'concordance'); ?></h2>
             <?php $this->renderUsageTable(); ?>
         </div>
+        <?php
+    }
+
+    /**
+     * Render an admin notice for the cache flush result, if one is queued
+     * via the concordance_flushed query string flag.
+     *
+     * @return void
+     */
+    private function renderCacheFlushNotices(): void
+    {
+        if (!isset($_GET['concordance_flushed'])) {
+            return;
+        }
+
+        $flag = sanitize_text_field(wp_unslash($_GET['concordance_flushed']));
+
+        if ($flag === 'invalid') {
+            echo '<div class="notice notice-error is-dismissible"><p>'
+                . esc_html__('Cache flush request was rejected (invalid security token).', 'concordance')
+                . '</p></div>';
+            return;
+        }
+
+        if ($flag === 'unavailable') {
+            echo '<div class="notice notice-error is-dismissible"><p>'
+                . esc_html__('Cache service is unavailable. Please contact your administrator.', 'concordance')
+                . '</p></div>';
+            return;
+        }
+
+        if ($flag === 'error') {
+            echo '<div class="notice notice-error is-dismissible"><p>'
+                . esc_html__('Cache flush failed. Check the error log for details.', 'concordance')
+                . '</p></div>';
+            return;
+        }
+
+        if (ctype_digit($flag)) {
+            $count = (int) $flag;
+            echo '<div class="notice notice-success is-dismissible"><p>'
+                /* translators: %d: number of cached entries cleared */
+                . sprintf(esc_html__('Cache flushed: %d cached entries cleared.', 'concordance'), $count)
+                . '</p></div>';
+        }
+    }
+
+    /**
+     * Render the cache maintenance section.
+     *
+     * @return void
+     */
+    private function renderCacheMaintenance(): void
+    {
+        $flushUrl = wp_nonce_url(
+            add_query_arg(
+                'concordance_flush_cache',
+                '1',
+                admin_url('admin.php?page=concordance')
+            ),
+            'concordance_flush_cache_nonce'
+        );
+        ?>
+        <p><?php esc_html_e(
+            'Force-clear all cached API responses. Useful after the AAGBDB data has changed and you do not want to wait for the cache to expire.',
+            'concordance'
+        ); ?></p>
+        <p>
+            <a href="<?php echo esc_url($flushUrl); ?>"
+               class="button button-secondary"
+               onclick="return confirm('<?php echo esc_attr(esc_js(__(
+                   'Clear all cached AAGBDB responses now?',
+                   'concordance'
+               ))); ?>');">
+                <?php esc_html_e('Flush Cache', 'concordance'); ?>
+            </a>
+        </p>
         <?php
     }
 
