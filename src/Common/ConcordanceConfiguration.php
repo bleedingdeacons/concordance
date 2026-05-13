@@ -28,6 +28,12 @@ final class ConcordanceConfiguration
     /** @var string Option key for selected dashboard display fields */
     public const OPTION_DASHBOARD_FIELDS = 'concordance_dashboard_fields';
 
+    /** @var string Option key for the intergroup ID the dashboard filters on */
+    public const OPTION_INTERGROUP_ID = 'concordance_intergroup_id';
+
+    /** @var int Sentinel value meaning "all intergroups, no filter" */
+    public const INTERGROUP_ID_ALL = 0;
+
     /** @var string Default base URL for the AAGBDB API */
     public const DEFAULT_API_BASE_URL = 'https://aagbdb.org.uk/api';
 

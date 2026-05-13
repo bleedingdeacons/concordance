@@ -163,6 +163,12 @@ class SettingsAdmin
             'default'           => ConcordanceConfiguration::DEFAULT_REQUEST_TIMEOUT,
         ]);
 
+        register_setting('concordance_options', ConcordanceConfiguration::OPTION_INTERGROUP_ID, [
+            'type'              => 'integer',
+            'sanitize_callback' => 'absint',
+            'default'           => ConcordanceConfiguration::INTERGROUP_ID_ALL,
+        ]);
+
         register_setting('concordance_options', ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS, [
             'type'              => 'array',
             'sanitize_callback' => [$this, 'sanitizeDashboardFields'],
@@ -222,6 +228,14 @@ class SettingsAdmin
                 ) . '</p>';
             },
             'concordance'
+        );
+
+        add_settings_field(
+            ConcordanceConfiguration::OPTION_INTERGROUP_ID,
+            esc_html__('Intergroup Filter', 'concordance'),
+            [$this, 'renderIntergroupIdField'],
+            'concordance',
+            'concordance_dashboard_section'
         );
 
         add_settings_field(
@@ -308,6 +322,104 @@ class SettingsAdmin
         $val = get_option(ConcordanceConfiguration::OPTION_REQUEST_TIMEOUT, ConcordanceConfiguration::DEFAULT_REQUEST_TIMEOUT);
         echo '<input type="number" name="' . esc_attr(ConcordanceConfiguration::OPTION_REQUEST_TIMEOUT) . '" value="' . esc_attr((string) $val) . '" min="1" step="1" class="small-text" />';
         echo '<p class="description">' . esc_html__('HTTP request timeout in seconds.', 'concordance') . '</p>';
+    }
+
+    /**
+     * Render the Intergroup filter dropdown.
+     *
+     * The list of intergroups is built from whatever the API has already
+     * returned (cached). If the cache is empty or the API errored, we fall
+     * back to showing only the currently-saved value so the user doesn't
+     * silently lose their selection.
+     *
+     * @return void
+     */
+    public function renderIntergroupIdField(): void
+    {
+        $option   = ConcordanceConfiguration::OPTION_INTERGROUP_ID;
+        $current  = (int) get_option($option, ConcordanceConfiguration::INTERGROUP_ID_ALL);
+        $choices  = $this->getIntergroupChoices();
+        $hasData  = !empty($choices);
+
+        echo '<select name="' . esc_attr($option) . '" id="' . esc_attr($option) . '">';
+
+        // "All" sentinel — always present.
+        $allSelected = $current === ConcordanceConfiguration::INTERGROUP_ID_ALL ? ' selected' : '';
+        echo '<option value="' . esc_attr((string) ConcordanceConfiguration::INTERGROUP_ID_ALL) . '"' . $allSelected . '>'
+            . esc_html__('All intergroups', 'concordance')
+            . '</option>';
+
+        // If the cache is empty but we have a saved non-zero value, keep it
+        // visible as a single option so the form doesn't appear to lose it.
+        if (!$hasData && $current !== ConcordanceConfiguration::INTERGROUP_ID_ALL) {
+            echo '<option value="' . esc_attr((string) $current) . '" selected>'
+                . sprintf(
+                    /* translators: %d: intergroup ID */
+                    esc_html__('Intergroup #%d (currently saved)', 'concordance'),
+                    $current
+                )
+                . '</option>';
+        }
+
+        foreach ($choices as $id => $name) {
+            $selected = $current === $id ? ' selected' : '';
+            echo '<option value="' . esc_attr((string) $id) . '"' . $selected . '>'
+                . esc_html(GroupListing::titleCase($name))
+                . '</option>';
+        }
+
+        echo '</select>';
+
+        if ($hasData) {
+            echo '<p class="description">' . esc_html__(
+                'Only groups belonging to this intergroup will appear in the dashboard widget. Select "All intergroups" to disable the filter.',
+                'concordance'
+            ) . '</p>';
+        } else {
+            echo '<p class="description">' . esc_html__(
+                'No intergroup data is available yet — the list will populate once the API returns groups. Test the API connection below or wait for the cache to fill.',
+                'concordance'
+            ) . '</p>';
+        }
+    }
+
+    /**
+     * Build a deduplicated, sorted list of intergroups from cached API data.
+     *
+     * @return array<int, string> Map of intergroup ID => intergroup name,
+     *                             sorted alphabetically by name.
+     */
+    private function getIntergroupChoices(): array
+    {
+        if ($this->cache === null) {
+            return [];
+        }
+
+        $response = $this->cache->getGroups();
+        if (is_wp_error($response)) {
+            return [];
+        }
+
+        $groups  = GroupListing::collectionFromResponse($response);
+        $choices = [];
+
+        foreach ($groups as $group) {
+            $id   = $group->getIntergroupId();
+            $name = $group->getIntergroupName();
+
+            if ($id <= 0) {
+                continue;
+            }
+
+            // First occurrence wins; later duplicates are ignored.
+            if (!isset($choices[$id])) {
+                $choices[$id] = $name !== '' ? $name : ('Intergroup #' . $id);
+            }
+        }
+
+        asort($choices, SORT_NATURAL | SORT_FLAG_CASE);
+
+        return $choices;
     }
 
     /**
@@ -623,6 +735,24 @@ class SettingsAdmin
                             /* translators: %d: number of groups returned by the API */
                          . sprintf(esc_html__('Success! Received %d group(s) from the API.', 'concordance'), count($groups))
                          . '</p></div>';
+
+                    // Log the first raw result to the browser console. Useful
+                    // for inspecting the actual API payload shape (e.g. when
+                    // working out which keys to enable in Visible Fields).
+                    $firstRaw = $this->extractFirstRawResult($result);
+                    if ($firstRaw !== null) {
+                        $payload = wp_json_encode($firstRaw, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                        if ($payload !== false) {
+                            echo '<script>console.log('
+                                . wp_json_encode(__('[Concordance] First API result:', 'concordance'))
+                                . ', '
+                                . $payload
+                                . ');</script>';
+                            echo '<p class="description">'
+                                . esc_html__('The first result has been logged to the browser console — open DevTools to inspect the raw API payload.', 'concordance')
+                                . '</p>';
+                        }
+                    }
                 }
             }
         } catch (Exception $e) {
@@ -641,6 +771,41 @@ class SettingsAdmin
             </a>
         </p>
         <?php
+    }
+
+    /**
+     * Pull the first raw record from an API response.
+     *
+     * Mirrors the logic in GroupListing::collectionFromResponse so we
+     * unwrap "results" / "data" envelopes the same way.
+     *
+     * @param mixed $response The decoded API response.
+     * @return array<string, mixed>|null The first raw record, or null if none.
+     */
+    private function extractFirstRawResult(mixed $response): ?array
+    {
+        if (!is_array($response)) {
+            return null;
+        }
+
+        $items = $response;
+
+        if (isset($response['results']) && is_array($response['results'])) {
+            $items = $response['results'];
+        } elseif (isset($response['data']) && is_array($response['data'])) {
+            $items = $response['data'];
+        }
+
+        // Single-record envelope: a record object rather than a list.
+        if (!empty($items) && !isset($items[0]) && isset($items['id'])) {
+            return $items;
+        }
+
+        if (empty($items) || !isset($items[0]) || !is_array($items[0])) {
+            return null;
+        }
+
+        return $items[0];
     }
 
     /**

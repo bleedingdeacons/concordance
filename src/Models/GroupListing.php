@@ -228,6 +228,68 @@ class GroupListing implements JsonSerializable
         return wp_date('d/m/Y', $timestamp);
     }
 
+    /**
+     * Convert an upper-case-ish display string to Title Case for the UI.
+     *
+     * The API returns most string fields in ALL CAPS (e.g.
+     * "WILTSHIRE INTERGROUP"). This helper renders them as
+     * "Wiltshire Intergroup" for display. Mixed-case input is preserved
+     * — we only normalise when the string is dominated by upper case.
+     *
+     * Small connector words ("of", "and", "the", etc.) are kept lower
+     * case unless they are the first word.
+     *
+     * @param string $value Raw display string from the API.
+     * @return string       Title-cased string suitable for display.
+     */
+    public static function titleCase(string $value): string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return '';
+        }
+
+        // Preserve strings that already have mixed case — assume the
+        // original casing was intentional (e.g. "McDonald", "AA").
+        $letters = preg_replace('/[^A-Za-z]/', '', $value) ?? '';
+        if ($letters !== '' && $letters !== strtoupper($letters) && $letters !== strtolower($letters)) {
+            return $value;
+        }
+
+        $lower = mb_strtolower($value, 'UTF-8');
+        $small = ['of', 'and', 'the', 'a', 'an', 'in', 'on', 'at', 'for', 'to', 'by', 'with'];
+        $seen  = 0;
+
+        // Capitalise the first letter of each whitespace- or hyphen-separated
+        // chunk, skipping small connector words unless they are the first word.
+        return preg_replace_callback(
+            '/([A-Za-z\x{00C0}-\x{024F}\']+)/u',
+            static function (array $m) use ($small, &$seen): string {
+                $word      = $m[1];
+                $position  = $seen++;
+                $lowerWord = mb_strtolower($word, 'UTF-8');
+
+                if ($position > 0 && in_array($lowerWord, $small, true)) {
+                    return $lowerWord;
+                }
+
+                return mb_strtoupper(mb_substr($lowerWord, 0, 1, 'UTF-8'), 'UTF-8')
+                    . mb_substr($lowerWord, 1, null, 'UTF-8');
+            },
+            $lower
+        ) ?? $value;
+    }
+
+    /**
+     * Get the intergroup name in Title Case for display.
+     *
+     * @return string
+     */
+    public function getIntergroupDisplayName(): string
+    {
+        return self::titleCase($this->intergroupName);
+    }
+
     /* -----------------------------------------------------------------
        Serialisation
        ----------------------------------------------------------------- */
