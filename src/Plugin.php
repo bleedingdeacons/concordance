@@ -100,7 +100,8 @@ class Plugin
         $container->register(SettingsAdmin::class, function (ContainerInterface $c) {
             return new SettingsAdmin(
                 $c->get(ApiClient::class),
-                $c->get(Encryption::class)
+                $c->get(Encryption::class),
+                $c->get(ApiCache::class)
             );
         });
 

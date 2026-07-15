@@ -5,9 +5,12 @@ declare(strict_types=1);
 /**
  * Plugin Name: Concordance
  * Description: API client for the AAGBDB Groups API. Standalone plugin with PSR-11 container.
- * Version: 1.5.1
+ * Version: 1.6.4
+ * Build date: 2026/05/31
  * Requires at least: 6.0
  * Requires PHP: 8.1
+ * GitHub Plugin URI: https://github.com/thebleedingdeacons/concordance
+ * GitHub Branch: main
  * Author: The Bleeding Deacons
  * Author URI: https://github.com/bleedingdeacons/concordance
  * Contact: thebleedingdeacons@gmail.com
@@ -33,7 +36,7 @@ if (function_exists('get_plugin_data')) {
     $concordance_plugin_data = get_plugin_data(__FILE__, false, false);
     define('CONCORDANCE_VERSION', $concordance_plugin_data['Version']);
 } else {
-    define('CONCORDANCE_VERSION', '1.0.0');
+    define('CONCORDANCE_VERSION', 'Unknown');
 }
 define('CONCORDANCE_PLUGIN_DIR', $concordance_plugin_dir);
 define('CONCORDANCE_PLUGIN_URL', $concordance_plugin_url);

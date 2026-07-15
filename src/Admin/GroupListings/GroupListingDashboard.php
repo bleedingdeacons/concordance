@@ -9,15 +9,32 @@ if (!defined('ABSPATH')) {
 }
 
 use Concordance\Api\ApiCache;
+use Concordance\Common\ConcordanceConfiguration;
 use Concordance\Models\GroupListing;
 
+use function absint;
 use function add_action;
+use function admin_url;
+use function current_user_can;
 use function esc_attr;
 use function esc_html;
+use function esc_html__;
 use function esc_url;
+use function esc_url_raw;
 use function get_current_screen;
+use function get_option;
 use function is_wp_error;
+use function sanitize_text_field;
+use function update_option;
 use function wp_add_dashboard_widget;
+use function wp_die;
+use function wp_json_encode;
+use function wp_nonce_field;
+use function wp_safe_redirect;
+use function wp_send_json_error;
+use function wp_send_json_success;
+use function wp_unslash;
+use function wp_verify_nonce;
 
 /**
  * Group Listing Dashboard Widget
@@ -25,21 +42,13 @@ use function wp_add_dashboard_widget;
  * Adds a dashboard panel listing all groups from the AAGBDB API
  * via the Concordance plugin's ApiCache and GroupListing model.
  *
- * Renders from the raw API data (via GroupListing::getRaw()) so
- * every field the API returns is displayed regardless of how the
- * model maps it.
+ * Which fields appear on each card is controlled by the
+ * concordance_dashboard_fields option, configured on the Concordance
+ * settings page. The group name is always shown.
  */
 class GroupListingDashboard
 {
     private ApiCache $apiCache;
-
-    /**
-     * Fields to skip when rendering the detail grid.
-     * These are either shown in the card header or are internal.
-     */
-    private const HEADER_FIELDS = [
-        'id', 'groupName', 'intergroupId', 'intergroupName',
-    ];
 
     /**
      * Fields that look like URLs and should be rendered as links.
@@ -59,6 +68,8 @@ class GroupListingDashboard
 
         add_action('wp_dashboard_setup', [$this, 'registerDashboardWidget']);
         add_action('admin_head', [$this, 'addDashboardStyles']);
+        add_action('admin_post_concordance_set_intergroup', [$this, 'handleSetIntergroup']);
+        add_action('wp_ajax_concordance_filter_intergroup', [$this, 'ajaxFilterIntergroup']);
     }
 
     /**
@@ -68,7 +79,7 @@ class GroupListingDashboard
     {
         wp_add_dashboard_widget(
             'concordance_group_listings_dashboard',
-            'AAGBDB Group Listings',
+            'National Group Listings',
             [$this, 'renderDashboardWidget'],
             null,
             null,
@@ -92,17 +103,32 @@ class GroupListingDashboard
             return;
         }
 
-        $groups = GroupListing::collectionFromResponse($response);
+        $allGroups = GroupListing::collectionFromResponse($response);
 
-        // Filter to intergroup ID 1
-        $groups = array_values(array_filter(
-            $groups,
-            static fn(GroupListing $g) => $g->getIntergroupId() === 1
-        ));
-
-        if (empty($groups)) {
+        if (empty($allGroups)) {
             echo '<p class="gl-empty">No groups found from the AAGBDB API.</p>';
             return;
+        }
+
+        // Build the (intergroup ID => raw name) choice list from the FULL
+        // set, so the dropdown shows every option regardless of the active
+        // filter.
+        $choices = $this->buildIntergroupChoices($allGroups);
+
+        // Current site-wide filter (0 = no filter, show all).
+        $filterId = (int) get_option(
+            ConcordanceConfiguration::OPTION_INTERGROUP_ID,
+            ConcordanceConfiguration::INTERGROUP_ID_ALL
+        );
+
+        // Apply the filter to produce the displayed set.
+        if ($filterId === ConcordanceConfiguration::INTERGROUP_ID_ALL) {
+            $groups = $allGroups;
+        } else {
+            $groups = array_values(array_filter(
+                $allGroups,
+                static fn(GroupListing $g) => $g->getIntergroupId() === $filterId
+            ));
         }
 
         // Sort by day, then time, then name
@@ -110,30 +136,383 @@ class GroupListingDashboard
 
         echo '<div class="gl-dashboard-widget">';
 
-        // Summary
-        echo '<div class="gl-summary">';
-        echo '<div class="gl-summary-item"><span class="gl-summary-count">' . esc_html((string) count($groups)) . '</span> Groups</div>';
+        // First row: dropdown form + count.
+        $this->renderIntergroupSelector($choices, $filterId, count($groups));
+
+        // Swappable region — replaced via AJAX when the dropdown changes.
+        echo '<div class="gl-cards" id="gl-cards" data-concordance-cards>';
+        $this->renderCards($groups);
         echo '</div>';
 
-        foreach ($groups as $group) {
-            $this->renderGroupCard($group);
+        echo '</div>';
+
+        // Wire up the dropdown AJAX. MUST be after the cards container is
+        // in the DOM, otherwise the IIFE's element lookups return null.
+        $this->renderInlineScript();
+    }
+
+    /**
+     * Render the cards portion of the widget (the part that gets swapped
+     * by AJAX when the intergroup filter changes).
+     *
+     * @param GroupListing[] $groups Already filtered and sorted.
+     * @return void
+     */
+    private function renderCards(array $groups): void
+    {
+        if (empty($groups)) {
+            echo '<p class="gl-empty">' . esc_html__(
+                'No groups match the selected intergroup. Choose a different intergroup above.',
+                'concordance'
+            ) . '</p>';
+            return;
         }
+
+        $visibleFields = $this->getVisibleFields();
+
+        foreach ($groups as $group) {
+            $this->renderGroupCard($group, $visibleFields);
+        }
+    }
+
+    /**
+     * Build a deduplicated, sorted map of intergroup ID => raw (uppercase) name.
+     *
+     * @param GroupListing[] $groups
+     * @return array<int, string>
+     */
+    private function buildIntergroupChoices(array $groups): array
+    {
+        $choices = [];
+
+        foreach ($groups as $group) {
+            $id   = $group->getIntergroupId();
+            $name = $group->getIntergroupName();
+
+            if ($id <= 0) {
+                continue;
+            }
+
+            // First occurrence wins.
+            if (!isset($choices[$id])) {
+                $choices[$id] = $name !== '' ? $name : ('Intergroup #' . $id);
+            }
+        }
+
+        // Sort by Title-Cased name, case-insensitive, natural order.
+        uasort($choices, static function (string $a, string $b): int {
+            return strnatcasecmp(GroupListing::titleCase($a), GroupListing::titleCase($b));
+        });
+
+        return $choices;
+    }
+
+    /**
+     * Render the interactive intergroup-selector row.
+     *
+     * Posts to admin-post.php which writes the site-wide option and
+     * redirects back to the dashboard. CSRF-protected with a nonce.
+     *
+     * @param array<int, string> $choices Map of intergroup ID => raw name.
+     * @param int                $current Currently saved filter ID.
+     * @param int                $count   Number of groups in the filtered set.
+     * @return void
+     */
+    private function renderIntergroupSelector(array $choices, int $current, int $count): void
+    {
+        $actionUrl = admin_url('admin-post.php');
+        $returnUrl = admin_url('index.php'); // WordPress dashboard
+        $selectId  = 'concordance-dashboard-intergroup';
+        $formId    = 'concordance-dashboard-form';
+        $countId   = 'concordance-dashboard-count';
+
+        echo '<div class="gl-summary">';
+
+        echo '<form method="post" action="' . esc_url($actionUrl) . '" id="' . esc_attr($formId) . '" class="gl-summary-item gl-summary-form">';
+        echo '<input type="hidden" name="action" value="concordance_set_intergroup" />';
+        echo '<input type="hidden" name="_wp_http_referer" value="' . esc_attr($returnUrl) . '" />';
+        wp_nonce_field('concordance_set_intergroup', '_concordance_nonce');
+
+        echo '<label for="' . esc_attr($selectId) . '" class="gl-summary-label">'
+            . esc_html__('Intergroup:', 'concordance') . '</label> ';
+
+        echo '<select name="intergroup_id" id="' . esc_attr($selectId) . '">';
+
+        // "All" sentinel always present.
+        $allSelected = $current === ConcordanceConfiguration::INTERGROUP_ID_ALL ? ' selected' : '';
+        echo '<option value="' . esc_attr((string) ConcordanceConfiguration::INTERGROUP_ID_ALL) . '"' . $allSelected . '>'
+            . esc_html__('All intergroups', 'concordance')
+            . '</option>';
+
+        // If the saved value isn't in $choices (e.g. that intergroup no
+        // longer appears in the API data), keep it visible so it isn't
+        // silently dropped.
+        if ($current !== ConcordanceConfiguration::INTERGROUP_ID_ALL && !isset($choices[$current])) {
+            echo '<option value="' . esc_attr((string) $current) . '" selected>'
+                . sprintf(
+                    /* translators: %d: intergroup ID */
+                    esc_html__('Intergroup #%d (currently saved)', 'concordance'),
+                    $current
+                )
+                . '</option>';
+        }
+
+        foreach ($choices as $id => $rawName) {
+            $selected = $current === $id ? ' selected' : '';
+            echo '<option value="' . esc_attr((string) $id) . '"' . $selected . '>'
+                . esc_html(GroupListing::titleCase($rawName))
+                . '</option>';
+        }
+
+        echo '</select>';
+
+        // No-JS fallback submit button (also shown briefly before JS binds).
+        echo ' <noscript><button type="submit" class="button button-small">'
+            . esc_html__('Apply', 'concordance') . '</button></noscript>';
+
+        // Inline status indicator (hidden until the request is in flight).
+        echo ' <span class="gl-summary-status" aria-live="polite" hidden></span>';
+
+        echo '</form>';
+
+        echo '<div class="gl-summary-item gl-summary-count-wrap">'
+            . '<span class="gl-summary-count" id="' . esc_attr($countId) . '">' . esc_html((string) $count) . '</span> '
+            . esc_html__('Groups', 'concordance')
+            . '</div>';
 
         echo '</div>';
     }
 
     /**
-     * Render a single group card from the raw API data.
+     * Emit the inline JS that hijacks the dropdown submission and swaps
+     * the cards via AJAX.
      *
-     * The card header shows the group name (resolved from common key
-     * names). The body renders every other field the API returned as
-     * a label/value pair.
+     * MUST be called AFTER the form, select, and cards container have
+     * already been emitted to the page, otherwise the IIFE's element
+     * lookups will return null and silently bail out.
      *
-     * @param GroupListing $group Group listing model
+     * @return void
      */
-    private function renderGroupCard(GroupListing $group): void
+    private function renderInlineScript(): void
     {
-        $raw = $group->getRaw();
+        $ajaxUrl  = admin_url('admin-ajax.php');
+        $selectId = 'concordance-dashboard-intergroup';
+        $formId   = 'concordance-dashboard-form';
+        $countId  = 'concordance-dashboard-count';
+        ?>
+        <script>
+        (function () {
+            function init() {
+                var form    = document.getElementById(<?php echo wp_json_encode($formId); ?>);
+                var select  = document.getElementById(<?php echo wp_json_encode($selectId); ?>);
+                var cards   = document.querySelector('[data-concordance-cards]');
+                var countEl = document.getElementById(<?php echo wp_json_encode($countId); ?>);
+                if (!form || !select || !cards || form.dataset.concordanceBound) { return; }
+                form.dataset.concordanceBound = '1';
+
+                var ajaxUrl = <?php echo wp_json_encode($ajaxUrl); ?>;
+                var status  = form.querySelector('.gl-summary-status');
+
+                function showStatus(text, isError) {
+                    if (!status) { return; }
+                    status.textContent = text;
+                    status.hidden = false;
+                    status.classList.toggle('is-error', !!isError);
+                }
+                function clearStatus() {
+                    if (!status) { return; }
+                    status.hidden = true;
+                    status.textContent = '';
+                    status.classList.remove('is-error');
+                }
+
+                // Intercept the form's submit too, so the no-JS Apply
+                // button (briefly visible during page load) also uses AJAX
+                // when JS is available.
+                form.addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    runUpdate();
+                });
+                select.addEventListener('change', runUpdate);
+
+                function runUpdate() {
+                    var body = new FormData(form);
+                    // admin-ajax expects the canonical wp_ajax action name.
+                    body.set('action', 'concordance_filter_intergroup');
+
+                    select.disabled = true;
+                    cards.classList.add('is-loading');
+                    showStatus(<?php echo wp_json_encode(__('Updating…', 'concordance')); ?>, false);
+
+                    fetch(ajaxUrl, {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        body: body
+                    }).then(function (res) {
+                        return res.json().then(function (json) { return { ok: res.ok, json: json }; });
+                    }).then(function (result) {
+                        if (!result.ok || !result.json || result.json.success !== true) {
+                            var msg = (result.json && result.json.data && result.json.data.message)
+                                ? result.json.data.message
+                                : <?php echo wp_json_encode(__('Couldn’t update — please try again.', 'concordance')); ?>;
+                            throw new Error(msg);
+                        }
+                        var data = result.json.data || {};
+                        cards.innerHTML = data.html || '';
+                        if (countEl && typeof data.count === 'number') {
+                            countEl.textContent = String(data.count);
+                        }
+                        clearStatus();
+                    }).catch(function (err) {
+                        showStatus(err && err.message ? err.message : <?php echo wp_json_encode(__('Couldn’t update — please try again.', 'concordance')); ?>, true);
+                    }).then(function () {
+                        select.disabled = false;
+                        cards.classList.remove('is-loading');
+                    });
+                }
+            }
+
+            // The script element is emitted after the cards container, so
+            // the elements should already be present. Belt and braces:
+            // wait for DOMContentLoaded if we somehow got here too early.
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', init);
+            } else {
+                init();
+            }
+        })();
+        </script>
+        <?php
+    }
+
+    /**
+     * Handle the dashboard intergroup-filter form submission.
+     *
+     * Verifies the nonce and capability, writes the site-wide option,
+     * then redirects back to the dashboard. The chosen value is
+     * `absint()`-sanitised; unknown IDs simply produce an empty filtered
+     * set on the next render (no error).
+     *
+     * @return void
+     */
+    public function handleSetIntergroup(): void
+    {
+        if (!current_user_can('edit_dashboard') && !current_user_can('manage_options')) {
+            wp_die(esc_html__('Insufficient permissions.', 'concordance'), '', ['response' => 403]);
+        }
+
+        $nonce = isset($_POST['_concordance_nonce'])
+            ? sanitize_text_field(wp_unslash($_POST['_concordance_nonce']))
+            : '';
+        if (!wp_verify_nonce($nonce, 'concordance_set_intergroup')) {
+            wp_die(esc_html__('Security check failed.', 'concordance'), '', ['response' => 403]);
+        }
+
+        $value = isset($_POST['intergroup_id']) ? absint($_POST['intergroup_id']) : 0;
+        update_option(ConcordanceConfiguration::OPTION_INTERGROUP_ID, $value);
+
+        $referer = isset($_POST['_wp_http_referer'])
+            ? esc_url_raw(wp_unslash($_POST['_wp_http_referer']))
+            : admin_url('index.php');
+
+        wp_safe_redirect($referer);
+        exit;
+    }
+
+    /**
+     * AJAX endpoint — apply a new intergroup filter and return the
+     * rendered cards HTML so the client can swap it in place.
+     *
+     * Echoes a JSON response shaped as:
+     *   { success: true, data: { html: "...", count: 5 } }
+     * on success, or the wp_send_json_error shape on failure.
+     *
+     * @return void
+     */
+    public function ajaxFilterIntergroup(): void
+    {
+        if (!current_user_can('edit_dashboard') && !current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Insufficient permissions.', 'concordance')], 403);
+        }
+
+        $nonce = isset($_POST['_concordance_nonce'])
+            ? sanitize_text_field(wp_unslash($_POST['_concordance_nonce']))
+            : '';
+        if (!wp_verify_nonce($nonce, 'concordance_set_intergroup')) {
+            wp_send_json_error(['message' => __('Security check failed.', 'concordance')], 403);
+        }
+
+        $value = isset($_POST['intergroup_id']) ? absint($_POST['intergroup_id']) : 0;
+        update_option(ConcordanceConfiguration::OPTION_INTERGROUP_ID, $value);
+
+        // Re-fetch groups and apply the new filter.
+        $response = $this->apiCache->getGroups();
+        if (is_wp_error($response)) {
+            wp_send_json_error([
+                'message' => $response->get_error_message(),
+            ], 500);
+        }
+
+        $allGroups = GroupListing::collectionFromResponse($response);
+
+        if ($value === ConcordanceConfiguration::INTERGROUP_ID_ALL) {
+            $groups = $allGroups;
+        } else {
+            $groups = array_values(array_filter(
+                $allGroups,
+                static fn(GroupListing $g) => $g->getIntergroupId() === $value
+            ));
+        }
+
+        GroupListing::sort($groups, 'day,time,name');
+
+        ob_start();
+        $this->renderCards($groups);
+        $html = ob_get_clean();
+
+        wp_send_json_success([
+            'html'  => $html,
+            'count' => count($groups),
+        ]);
+    }
+
+    /**
+     * Resolve the list of fields to display, filtered through the
+     * DASHBOARD_FIELDS whitelist and ordered by it.
+     *
+     * @return array<string, string> Field key => human label
+     */
+    private function getVisibleFields(): array
+    {
+        $stored = get_option(
+            ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS,
+            ConcordanceConfiguration::DEFAULT_DASHBOARD_FIELDS
+        );
+        $selected = is_array($stored) ? $stored : ConcordanceConfiguration::DEFAULT_DASHBOARD_FIELDS;
+
+        $visible = [];
+        foreach (ConcordanceConfiguration::DASHBOARD_FIELDS as $key => $label) {
+            if (in_array($key, $selected, true)) {
+                $visible[$key] = $label;
+            }
+        }
+
+        return $visible;
+    }
+
+    /**
+     * Render a single group card.
+     *
+     * The card header always shows the group name. The body renders only
+     * the fields that have been enabled in the settings page, in the order
+     * defined by ConcordanceConfiguration::DASHBOARD_FIELDS.
+     *
+     * @param GroupListing $group         Group listing model
+     * @param array<string, string> $visibleFields key => human label
+     */
+    private function renderGroupCard(GroupListing $group, array $visibleFields): void
+    {
+        $raw  = $group->getRaw();
         $name = $this->resolveName($raw);
 
         echo '<div class="gl-card">';
@@ -145,8 +524,8 @@ class GroupListingDashboard
         echo '</div>';
         echo '</div>';
 
-        // --- Body: render every field except those used in the header ---
-        $fields = $this->getDisplayFields($raw);
+        // --- Body ---
+        $fields = $this->getDisplayFields($raw, $visibleFields);
 
         if (!empty($fields)) {
             echo '<div class="gl-card-content">';
@@ -158,7 +537,7 @@ class GroupListingDashboard
                 echo '<div class="' . esc_attr($fieldClass) . '">';
                 echo '<div class="gl-field-label">' . esc_html($label) . '</div>';
                 echo '<div class="gl-field-value">';
-                echo esc_html($this->renderFieldValue($label, $value));
+                echo $this->renderFieldValue($label, $value);
                 echo '</div>';
                 echo '</div>';
             }
@@ -181,29 +560,33 @@ class GroupListingDashboard
     }
 
     /**
-     * Build a filtered, human-labelled array of fields to display.
+     * Build a human-labelled array of fields to display, filtered to the
+     * user's selected visible fields.
      *
-     * Skips header fields, empty values, and nested arrays/objects.
+     * Empty values, nested arrays/objects, and boolean false are skipped
+     * so an enabled-but-empty field doesn't render an empty row.
      *
-     * @param array $raw Raw API data
-     * @return array<string, string> Label => value pairs
+     * @param array<string, mixed>  $raw           Raw API data
+     * @param array<string, string> $visibleFields key => label, in display order
+     * @return array<string, string>               Label => display value
      */
-    private function getDisplayFields(array $raw): array
+    private function getDisplayFields(array $raw, array $visibleFields): array
     {
         $fields = [];
 
-        foreach ($raw as $key => $value) {
-            // Skip header fields
-            if (in_array($key, self::HEADER_FIELDS, true)) {
+        foreach ($visibleFields as $key => $label) {
+            if (!array_key_exists($key, $raw)) {
                 continue;
             }
+
+            $value = $raw[$key];
 
             // Skip empty, null, nested arrays/objects
             if ($value === null || $value === '' || is_array($value) || is_object($value)) {
                 continue;
             }
 
-            // Skip boolean false
+            // Skip boolean false (e.g. an unset wheelchair flag)
             if ($value === false) {
                 continue;
             }
@@ -213,7 +596,6 @@ class GroupListingDashboard
                 $value = 'Yes';
             }
 
-            $label = $this->humaniseKey($key);
             $fields[$label] = (string) $value;
         }
 
@@ -243,25 +625,6 @@ class GroupListingDashboard
     }
 
     /**
-     * Convert a snake_case or camelCase API key to a human-readable label.
-     *
-     * Examples: "start_time" → "Start Time", "postCode" → "Post Code"
-     *
-     * @param string $key API field key
-     * @return string Human-readable label
-     */
-    private function humaniseKey(string $key): string
-    {
-        // Insert space before capitals in camelCase
-        $key = (string) preg_replace('/([a-z])([A-Z])/', '$1 $2', $key);
-
-        // Replace underscores and hyphens with spaces
-        $key = str_replace(['_', '-'], ' ', $key);
-
-        return ucwords(trim($key));
-    }
-
-    /**
      * Add custom styles for the dashboard widget
      */
     public function addDashboardStyles(): void
@@ -279,6 +642,7 @@ class GroupListingDashboard
 
             .gl-summary {
                 display: flex;
+                align-items: center;
                 gap: 12px;
                 padding: 12px 16px;
                 background: #f0f6fc;
@@ -292,11 +656,49 @@ class GroupListingDashboard
                 font-weight: 500;
             }
 
+            .gl-summary-form {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                margin: 0;
+            }
+
+            .gl-summary-form select {
+                font-size: 13px;
+                max-width: 240px;
+            }
+
+            .gl-summary-label {
+                font-weight: 600;
+            }
+
+            .gl-summary-count-wrap {
+                margin-left: auto;
+            }
+
             .gl-summary-count {
                 font-size: 16px;
                 font-weight: 700;
                 color: #1d2327;
                 margin-right: 2px;
+            }
+
+            .gl-summary-status {
+                font-size: 12px;
+                color: #50575e;
+                font-style: italic;
+                margin-left: 6px;
+            }
+
+            .gl-summary-status.is-error {
+                color: #b32d2e;
+                font-style: normal;
+            }
+
+            .gl-cards.is-loading {
+                opacity: 0.55;
+                transition: opacity 0.15s;
+                pointer-events: none;
             }
 
             .gl-card {
