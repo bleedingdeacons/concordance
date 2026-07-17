@@ -4,7 +4,7 @@
 
 Concordance provides a clean interface for consuming the [AAGBDB](https://aagbdb.org.uk) Groups API from within WordPress. It exposes group listing data through a REST proxy, an admin dashboard widget, WP-CLI commands, 
 
-**Version:** 1.6.4
+**Version:** 1.6.5
 **Requires:** WordPress 6.0+ · PHP 8.1+
 **License:** MIT (Modified — see [License](#license))
 **Author:** [The Bleeding Deacons](mailto:thebleedingdeacons@gmail.com)
