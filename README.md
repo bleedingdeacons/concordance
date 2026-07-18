@@ -1,7 +1,7 @@
 # Concordance
 
 [![CI](https://github.com/bleedingdeacons/concordance/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bleedingdeacons/concordance/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-1.6.5-blue)
+![Version](https://img.shields.io/badge/version-1.6.6-blue)
 ![PHP](https://img.shields.io/badge/php-8.1%2B-777bb4)
 ![Licence](https://img.shields.io/badge/licence-GPL%20v2-green)
 
