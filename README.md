@@ -1,11 +1,14 @@
 # Concordance
 
+[![CI](https://github.com/bleedingdeacons/concordance/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bleedingdeacons/concordance/actions/workflows/ci.yml)
+![Version](https://img.shields.io/badge/version-1.6.5-blue)
+![PHP](https://img.shields.io/badge/php-8.1%2B-777bb4)
+![Licence](https://img.shields.io/badge/licence-GPL%20v2-green)
+
 **API client for the AAGBDB Groups API — a standalone WordPress plugin with a PSR-11 dependency container.**
 
 Concordance provides a clean interface for consuming the [AAGBDB](https://aagbdb.org.uk) Groups API from within WordPress. It exposes group listing data through a REST proxy, an admin dashboard widget, WP-CLI commands, 
 
-**Version:** 1.6.5
-**Requires:** WordPress 6.0+ · PHP 8.1+
 **License:** MIT (Modified — see [License](#license))
 **Author:** [The Bleeding Deacons](mailto:thebleedingdeacons@gmail.com)
 
