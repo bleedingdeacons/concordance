@@ -51,13 +51,6 @@ class GroupListingDashboard
     private ApiCache $apiCache;
 
     /**
-     * Fields that look like URLs and should be rendered as links.
-     */
-    private const URL_FIELDS = [
-        'website', 'web', 'url', 'link', 'online_link', 'zoom',
-    ];
-
-    /**
      * Constructor
      *
      * @param ApiCache $apiCache Concordance API cache service

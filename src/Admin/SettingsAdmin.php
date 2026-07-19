@@ -496,7 +496,7 @@ class SettingsAdmin
         (function () {
             var fieldset = document.querySelector('.concordance-fields-fieldset');
             if (!fieldset) { return; }
-            var defaults = <?php echo wp_json_encode(array_values(ConcordanceConfiguration::DEFAULT_DASHBOARD_FIELDS)); ?>;
+            var defaults = <?php echo wp_json_encode(ConcordanceConfiguration::DEFAULT_DASHBOARD_FIELDS); ?>;
             var checkboxes = fieldset.querySelectorAll('input[type="checkbox"]');
 
             fieldset.addEventListener('click', function (e) {

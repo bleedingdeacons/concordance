@@ -91,7 +91,6 @@ class Plugin
         // Register Groups Manager
         $container->register(GroupListingManager::class, function (ContainerInterface $c) {
             return new GroupListingManager(
-                $c->get(ApiClient::class),
                 $c->get(ApiCache::class)
             );
         });
