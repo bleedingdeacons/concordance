@@ -8,7 +8,6 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-use Concordance\Api\ApiClient;
 use Concordance\Api\ApiCache;
 use Concordance\Common\ConcordanceConfiguration;
 use Concordance\Models\GroupListing;
@@ -30,12 +29,10 @@ use function sanitize_text_field;
  */
 class GroupListingManager
 {
-    private ApiClient $client;
     private ApiCache $cache;
 
-    public function __construct(ApiClient $client, ApiCache $cache)
+    public function __construct(ApiCache $cache)
     {
-        $this->client = $client;
         $this->cache = $cache;
 
         add_action('rest_api_init', [$this, 'registerRestRoutes']);
