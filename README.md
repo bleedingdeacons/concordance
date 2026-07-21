@@ -1,6 +1,7 @@
 # Concordance
 
 [![CI](https://github.com/bleedingdeacons/concordance/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bleedingdeacons/concordance/actions/workflows/ci.yml)
+[![Coverage Status](https://coveralls.io/repos/github/bleedingdeacons/concordance/badge.svg?branch=main)](https://coveralls.io/github/bleedingdeacons/concordance?branch=main)
 ![PHPStan](https://img.shields.io/badge/PHPStan-level%205-brightgreen)
 ![Version](https://img.shields.io/badge/version-1.6.9-blue)
 ![PHP](https://img.shields.io/badge/php-8.1%2B-777bb4)
