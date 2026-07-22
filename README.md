@@ -274,6 +274,24 @@ On deactivation, the plugin cleans up all transient caches (keys prefixed with `
 
 ---
 
+## Testing
+
+Install the dev dependencies and run the suite from the plugin directory:
+
+```bash
+composer install
+```
+
+| Command | Description |
+|---|---|
+| `composer test` | Run the PHPUnit test suite |
+| `composer phpstan` | Run PHPStan static analysis |
+
+Line coverage is reported to [Coveralls](https://coveralls.io/github/bleedingdeacons/concordance?branch=main)
+on every CI run — see the coverage badge at the top of this file.
+
+---
+
 ## License
 
 MIT License (Modified) — Copyright © 2025 The Bleeding Deacons.
