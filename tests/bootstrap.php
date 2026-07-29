@@ -25,3 +25,6 @@ if (!defined('CONCORDANCE_PLUGIN_URL')) {
 if (!defined('CONCORDANCE_VERSION')) {
     define('CONCORDANCE_VERSION', '1.0.0');
 }
+
+// WordPress / WP-CLI stubs for the unit tests.
+require_once __DIR__ . '/wp-stubs.php';
