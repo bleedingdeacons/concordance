@@ -13,5 +13,14 @@
         <include>
             <directory>src</directory>
         </include>
+        <exclude>
+            <!--
+                Admin screens: the settings page and the group-listing dashboard.
+                These are WordPress admin render/menu/AJAX glue exercised through
+                the admin UI at runtime, not in unit tests — the same exclusion
+                the other suite plugins apply to their src/Admin layers.
+            -->
+            <directory>src/Admin</directory>
+        </exclude>
     </source>
 </phpunit>
