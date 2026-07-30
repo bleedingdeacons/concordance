@@ -40,6 +40,7 @@ class GroupListing implements JsonSerializable
         private readonly string $startTime,
         private readonly string $endTime,
         private readonly string $lastUpdate,
+        /** @var array<string, mixed> */
         private readonly array $raw,
     ) {
     }
@@ -51,7 +52,7 @@ class GroupListing implements JsonSerializable
     /**
      * Create a GroupListing from a raw API response array.
      *
-     * @param array $data A single group record from the API.
+     * @param array<string, mixed> $data A single group record from the API.
      * @return self
      */
     public static function fromArray(array $data): self
@@ -75,7 +76,7 @@ class GroupListing implements JsonSerializable
      *
      * Handles flat arrays and responses wrapped in a "results" or "data" key.
      *
-     * @param array $response The full API response.
+     * @param array<string, mixed> $response The full API response.
      * @return self[]
      */
     public static function collectionFromResponse(array $response): array
@@ -148,7 +149,7 @@ class GroupListing implements JsonSerializable
     /**
      * Get the original raw API data array.
      *
-     * @return array
+     * @return array<string, mixed>
      */
     public function getRaw(): array
     {
@@ -297,7 +298,17 @@ class GroupListing implements JsonSerializable
     /**
      * Convert the model to an associative array matching the API shape.
      *
-     * @return array
+     * @return array{
+     *     id: int,
+     *     groupName: string,
+     *     town: string,
+     *     intergroupName: string,
+     *     intergroupId: int,
+     *     day: string,
+     *     startTime: string,
+     *     endTime: string,
+     *     lastUpdate: string
+     * }
      */
     public function toArray(): array
     {
@@ -315,7 +326,17 @@ class GroupListing implements JsonSerializable
     }
 
     /**
-     * @return array
+     * @return array{
+     *     id: int,
+     *     groupName: string,
+     *     town: string,
+     *     intergroupName: string,
+     *     intergroupId: int,
+     *     day: string,
+     *     startTime: string,
+     *     endTime: string,
+     *     lastUpdate: string
+     * }
      */
     public function jsonSerialize(): array
     {

@@ -544,7 +544,7 @@ class GroupListingDashboard
     /**
      * Resolve the group name from common API key patterns.
      *
-     * @param array $raw Raw API data
+     * @param array<string, mixed> $raw Raw API data
      * @return string
      */
     private function resolveName(array $raw): string

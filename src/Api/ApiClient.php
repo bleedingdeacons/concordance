@@ -31,6 +31,7 @@ class ApiClient
     private string $baseUrl;
     private string $apiKey;
     private int $timeout;
+    /** @var array<string, mixed> */
     private array $lastResponse = [];
 
     public function __construct(?string $apiKey = null, ?string $baseUrl = null, ?int $timeout = null)
@@ -43,8 +44,8 @@ class ApiClient
     /**
      * Fetch all groups from the API.
      *
-     * @param array $queryArgs Optional query parameters to append to the URL.
-     * @return array|WP_Error Decoded JSON array on success, WP_Error on failure.
+     * @param array<string, mixed> $queryArgs Optional query parameters to append to the URL.
+     * @return array<string, mixed>|WP_Error Decoded JSON array on success, WP_Error on failure.
      */
     public function getGroups(array $queryArgs = []): array|WP_Error
     {
@@ -55,7 +56,7 @@ class ApiClient
      * Fetch a single group by its ID.
      *
      * @param int|string $groupId The group identifier.
-     * @return array|WP_Error
+     * @return array<string, mixed>|WP_Error
      */
     public function getGroup(int|string $groupId): array|WP_Error
     {
@@ -66,8 +67,8 @@ class ApiClient
      * Generic GET helper — pass any sub-path under /api/.
      *
      * @param string $endpoint e.g. '/groups/' or '/groups/123/'
-     * @param array $params Query-string parameters.
-     * @return array|WP_Error
+     * @param array<string, mixed> $params Query-string parameters.
+     * @return array<string, mixed>|WP_Error
      */
     public function get(string $endpoint, array $params = []): array|WP_Error
     {
@@ -78,8 +79,8 @@ class ApiClient
      * Generic POST helper.
      *
      * @param string $endpoint
-     * @param array $body
-     * @return array|WP_Error
+     * @param array<string, mixed> $body
+     * @return array<string, mixed>|WP_Error
      */
     public function post(string $endpoint, array $body = []): array|WP_Error
     {
@@ -89,7 +90,7 @@ class ApiClient
     /**
      * Return the raw WP HTTP response from the last request (useful for debugging).
      *
-     * @return array
+     * @return array<string, mixed>
      */
     public function getLastResponse(): array
     {
@@ -112,9 +113,9 @@ class ApiClient
      *
      * @param string $method HTTP method (GET, POST, PUT, DELETE …).
      * @param string $endpoint Path relative to the base URL.
-     * @param array $queryArgs Query-string parameters.
-     * @param array $body Body payload for POST/PUT/PATCH.
-     * @return array|WP_Error
+     * @param array<string, mixed> $queryArgs Query-string parameters.
+     * @param array<string, mixed> $body Body payload for POST/PUT/PATCH.
+     * @return array<string, mixed>|WP_Error
      */
     private function request(string $method, string $endpoint, array $queryArgs = [], array $body = []): array|WP_Error
     {
@@ -180,7 +181,7 @@ class ApiClient
     /**
      * Build request headers including authentication.
      *
-     * @return array
+     * @return array<string, string>
      */
     private function buildHeaders(): array
     {

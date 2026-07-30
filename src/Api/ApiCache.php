@@ -36,9 +36,9 @@ class ApiCache
     /**
      * Fetch groups with WordPress transient caching.
      *
-     * @param array $queryArgs Optional API query parameters.
+     * @param array<string, mixed> $queryArgs Optional API query parameters.
      * @param int|null $cacheTtl Cache lifetime in seconds (null = use stored option).
-     * @return array|WP_Error
+     * @return array<string, mixed>|WP_Error
      */
     public function getGroups(array $queryArgs = [], ?int $cacheTtl = null): array|WP_Error
     {
@@ -83,7 +83,7 @@ class ApiCache
      *
      * @param int|string $groupId The group identifier.
      * @param int|null $cacheTtl Cache lifetime in seconds.
-     * @return array|WP_Error
+     * @return array<string, mixed>|WP_Error
      */
     public function getGroup(int|string $groupId, ?int $cacheTtl = null): array|WP_Error
     {
