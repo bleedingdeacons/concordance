@@ -74,8 +74,8 @@ class ConcordanceCli extends WP_CLI_Command
      *
      * @subcommand list
      *
-     * @param array $args       Positional arguments.
-     * @param array $assocArgs  Associative arguments.
+     * @param array<int, string>    $args       Positional arguments.
+     * @param array<string, string> $assocArgs  Associative arguments.
      * @return void
      */
     public function list_groups(array $args, array $assocArgs): void
@@ -151,8 +151,8 @@ class ConcordanceCli extends WP_CLI_Command
      *     wp concordance get 42
      *     wp concordance get 42 --format=json
      *
-     * @param array $args       Positional arguments.
-     * @param array $assocArgs  Associative arguments.
+     * @param array<int, string>    $args       Positional arguments.
+     * @param array<string, string> $assocArgs  Associative arguments.
      * @return void
      */
     public function get(array $args, array $assocArgs): void
@@ -192,8 +192,8 @@ class ConcordanceCli extends WP_CLI_Command
      *
      *     wp concordance test
      *
-     * @param array $args       Positional arguments.
-     * @param array $assocArgs  Associative arguments.
+     * @param array<int, string>    $args       Positional arguments.
+     * @param array<string, string> $assocArgs  Associative arguments.
      * @return void
      */
     public function test(array $args, array $assocArgs): void
@@ -219,8 +219,8 @@ class ConcordanceCli extends WP_CLI_Command
      *
      * @subcommand flush-cache
      *
-     * @param array $args       Positional arguments.
-     * @param array $assocArgs  Associative arguments.
+     * @param array<int, string>    $args       Positional arguments.
+     * @param array<string, string> $assocArgs  Associative arguments.
      * @return void
      */
     public function flush_cache(array $args, array $assocArgs): void
@@ -236,8 +236,8 @@ class ConcordanceCli extends WP_CLI_Command
      *
      *     wp concordance config
      *
-     * @param array $args       Positional arguments.
-     * @param array $assocArgs  Associative arguments.
+     * @param array<int, string>    $args       Positional arguments.
+     * @param array<string, string> $assocArgs  Associative arguments.
      * @return void
      */
     public function config(array $args, array $assocArgs): void
@@ -271,8 +271,8 @@ class ConcordanceCli extends WP_CLI_Command
      *
      *     wp concordance version
      *
-     * @param array $args       Positional arguments.
-     * @param array $assocArgs  Associative arguments.
+     * @param array<int, string>    $args       Positional arguments.
+     * @param array<string, string> $assocArgs  Associative arguments.
      * @return void
      */
     public function version(array $args, array $assocArgs): void
