@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Concordance\Tests\Unit\Api;
 
+use BleedingDeacons\WpMocks\Doubles\FakeWpdb;
+use BleedingDeacons\WpMocks\TestCase;
+use BleedingDeacons\WpMocks\WpState;
 use Concordance\Api\ApiCache;
 use Concordance\Api\ApiClient;
-use PHPUnit\Framework\TestCase;
 use WP_Error;
 
 /**
@@ -18,13 +20,14 @@ class ApiCacheTest extends TestCase
     private $client;
     private ApiCache $cache;
 
+    private FakeWpdb $wpdb;
+
     protected function setUp(): void
     {
         parent::setUp();
-        $GLOBALS['conc_options'] = [];
-        $GLOBALS['conc_transients'] = [];
-        $GLOBALS['conc_wpdb_queries'] = [];
-        unset($GLOBALS['conc_wpdb_query_result']);
+        // parent::setUp() clears WpState, so options and transients start empty.
+        $this->wpdb = $GLOBALS['wpdb'];
+        $this->wpdb->reset();
         $this->client = $this->createMock(ApiClient::class);
         $this->cache = new ApiCache($this->client);
     }
@@ -34,7 +37,7 @@ class ApiCacheTest extends TestCase
         $this->client->method('getGroups')->willReturn([['a' => 1]]);
         $result = $this->cache->getGroups([], 0);
         $this->assertSame([['a' => 1]], $result);
-        $this->assertSame([], $GLOBALS['conc_transients']); // nothing cached
+        $this->assertSame([], WpState::$transients); // nothing cached
     }
 
     public function testGetGroupsStoresAndServesFromCache(): void
@@ -44,7 +47,7 @@ class ApiCacheTest extends TestCase
         // First call: miss → fetch → store.
         $first = $this->cache->getGroups(['page' => 1], 600);
         $this->assertSame([['a' => 1]], $first);
-        $this->assertNotSame([], $GLOBALS['conc_transients']);
+        $this->assertNotSame([], WpState::$transients);
 
         // Second call: hit → no second client call (expects once).
         $second = $this->cache->getGroups(['page' => 1], 600);
@@ -56,15 +59,15 @@ class ApiCacheTest extends TestCase
         $this->client->method('getGroups')->willReturn(new WP_Error('e', 'm'));
         $result = $this->cache->getGroups([], 600);
         $this->assertInstanceOf(WP_Error::class, $result);
-        $this->assertSame([], $GLOBALS['conc_transients']);
+        $this->assertSame([], WpState::$transients);
     }
 
     public function testGetGroupsUsesStoredTtlOptionByDefault(): void
     {
-        $GLOBALS['conc_options']['concordance_cache_ttl'] = 0; // disables caching
+        WpState::$options['concordance_cache_ttl'] = 0; // disables caching
         $this->client->method('getGroups')->willReturn([['x' => 1]]);
         $this->cache->getGroups();
-        $this->assertSame([], $GLOBALS['conc_transients']);
+        $this->assertSame([], WpState::$transients);
     }
 
     public function testGetGroupCachesAndServes(): void
@@ -85,14 +88,14 @@ class ApiCacheTest extends TestCase
     {
         $this->client->method('getGroup')->willReturn(new WP_Error('e', 'm'));
         $this->assertInstanceOf(WP_Error::class, $this->cache->getGroup(9, 600));
-        $this->assertSame([], $GLOBALS['conc_transients']);
+        $this->assertSame([], WpState::$transients);
     }
 
     public function testFlushRunsTheDeleteQuery(): void
     {
-        $GLOBALS['conc_wpdb_query_result'] = 7;
+        $this->wpdb->queryResult = 7;
         $this->assertSame(7, $this->cache->flush());
-        $this->assertNotEmpty($GLOBALS['conc_wpdb_queries']);
+        $this->assertNotEmpty($this->wpdb->queries);
     }
 
     public function testGetGroupsWrapsAnUnexpectedException(): void

@@ -6,7 +6,8 @@ namespace Concordance\Tests\Unit\Managers;
 
 use Concordance\Api\ApiCache;
 use Concordance\Managers\GroupListingManager;
-use PHPUnit\Framework\TestCase;
+use BleedingDeacons\WpMocks\TestCase;
+use BleedingDeacons\WpMocks\WpState;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -23,7 +24,7 @@ class GroupListingManagerTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $GLOBALS['conc_rest_routes'] = [];
+        // parent::setUp() clears WpState, including $restRoutes.
         $this->cache = $this->createMock(ApiCache::class);
         $this->manager = new GroupListingManager($this->cache);
     }
@@ -31,14 +32,17 @@ class GroupListingManagerTest extends TestCase
     public function testRegisterRestRoutesRegistersBothRoutes(): void
     {
         $this->manager->registerRestRoutes();
-        $this->assertContains('/groups', $GLOBALS['conc_rest_routes']);
-        $this->assertContains('/groups/(?P<id>[\w-]+)', $GLOBALS['conc_rest_routes']);
+
+        $routes = array_column(WpState::$restRoutes, 'route');
+        $this->assertContains('/groups', $routes);
+        $this->assertContains('/groups/(?P<id>[\w-]+)', $routes);
     }
 
     public function testRegisteredValidateCallbacksBehave(): void
     {
         $this->manager->registerRestRoutes();
-        $args = $GLOBALS['conc_rest_args']['/groups']['args'];
+        $routes = array_column(WpState::$restRoutes, null, 'route');
+        $args = $routes['/groups']['args']['args'];
 
         $this->assertTrue($args['page']['validate_callback'](3));
         $this->assertFalse($args['page']['validate_callback'](0));

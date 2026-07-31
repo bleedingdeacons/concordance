@@ -6,7 +6,8 @@ namespace Concordance\Tests\Unit;
 
 use Concordance\Plugin;
 use Concordance\Managers\GroupListingManager;
-use PHPUnit\Framework\TestCase;
+use BleedingDeacons\WpMocks\TestCase;
+use BleedingDeacons\WpMocks\WpState;
 use Psr\Container\ContainerInterface;
 use ReflectionClass;
 use RuntimeException;
@@ -20,8 +21,9 @@ class PluginTest extends TestCase
     {
         parent::setUp();
         $this->resetStatics();
-        $GLOBALS['conc_options'] = [];
-        $GLOBALS['conc_is_admin'] = false;
+        // parent::setUp() clears WpState's options; is_admin() defaults to
+        // true there, and Plugin::init's admin-only branch needs it off.
+        WpState::$isAdmin = false;
     }
 
     protected function tearDown(): void

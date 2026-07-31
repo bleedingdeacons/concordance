@@ -8,7 +8,8 @@ use Concordance\Api\ApiCache;
 use Concordance\Api\ApiClient;
 use Concordance\Cli\ConcordanceCli;
 use ConcordanceCliExit;
-use PHPUnit\Framework\TestCase;
+use BleedingDeacons\WpMocks\TestCase;
+use BleedingDeacons\WpMocks\WpState;
 use WP_Error;
 
 /**
@@ -25,9 +26,10 @@ class ConcordanceCliTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // The WP-CLI log and formatter are local stubs, so they reset here;
+        // parent::setUp() has already cleared the options in WpState.
         $GLOBALS['conc_cli_log'] = [];
         $GLOBALS['conc_cli_formatted'] = null;
-        $GLOBALS['conc_options'] = [];
         $this->client = $this->createMock(ApiClient::class);
         $this->cache = $this->createMock(ApiCache::class);
         $this->cli = new ConcordanceCli($this->client, $this->cache);
@@ -141,7 +143,7 @@ class ConcordanceCliTest extends TestCase
 
     public function testConfigFormatsSettings(): void
     {
-        $GLOBALS['conc_options']['concordance_api_key'] = (new \Concordance\Common\Encryption())->encrypt('abcdefghijklmnop');
+        WpState::$options['concordance_api_key'] = (new \Concordance\Common\Encryption())->encrypt('abcdefghijklmnop');
         $this->cli->config([], []);
         $this->assertNotNull($GLOBALS['conc_cli_formatted']);
         $settings = array_column($GLOBALS['conc_cli_formatted']['items'], 'Setting');
