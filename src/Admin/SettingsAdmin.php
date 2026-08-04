@@ -558,45 +558,66 @@ class SettingsAdmin
      */
     public function handleCacheFlush(): void
     {
-        if (!isset($_GET['concordance_flush_cache'])) {
+        $target = $this->resolveCacheFlushRedirect();
+
+        if ($target === null) {
             return;
         }
 
+        wp_safe_redirect($target);
+        exit;
+    }
+
+    /**
+     * Decide where a "Flush Cache" request should be sent.
+     *
+     * All of handleCacheFlush()'s branching lives here so it can be exercised
+     * without the bare exit() that follows the redirect. Behaviour is
+     * unchanged: the two "do nothing" cases (no flush requested, or the user
+     * lacks the capability) answer with null, and every other case answers
+     * with the URL the caller redirects to.
+     *
+     * @return string|null Redirect target, or null to leave the request alone.
+     */
+    private function resolveCacheFlushRedirect(): ?string
+    {
+        if (!isset($_GET['concordance_flush_cache'])) {
+            return null;
+        }
+
         if (!current_user_can('manage_options')) {
-            return;
+            return null;
         }
 
         $nonce = isset($_GET['_wpnonce']) ? sanitize_text_field(wp_unslash($_GET['_wpnonce'])) : '';
         if (!wp_verify_nonce($nonce, 'concordance_flush_cache_nonce')) {
-            wp_safe_redirect(add_query_arg(
-                ['concordance_flushed' => 'invalid'],
-                admin_url('admin.php?page=concordance')
-            ));
-            exit;
+            return $this->cacheFlushRedirectUrl('invalid');
         }
 
         if ($this->cache === null) {
-            wp_safe_redirect(add_query_arg(
-                ['concordance_flushed' => 'unavailable'],
-                admin_url('admin.php?page=concordance')
-            ));
-            exit;
+            return $this->cacheFlushRedirectUrl('unavailable');
         }
 
         try {
-            $deleted = $this->cache->flush();
-            wp_safe_redirect(add_query_arg(
-                ['concordance_flushed' => (string) $deleted],
-                admin_url('admin.php?page=concordance')
-            ));
-            exit;
+            return $this->cacheFlushRedirectUrl((string) $this->cache->flush());
         } catch (Exception $e) {
-            wp_safe_redirect(add_query_arg(
-                ['concordance_flushed' => 'error'],
-                admin_url('admin.php?page=concordance')
-            ));
-            exit;
+            return $this->cacheFlushRedirectUrl('error');
         }
+    }
+
+    /**
+     * Build the settings-page URL carrying a cache-flush result flag.
+     *
+     * @param string $flag Either a digit string (entries cleared) or one of
+     *                     'invalid', 'unavailable', 'error'.
+     * @return string
+     */
+    private function cacheFlushRedirectUrl(string $flag): string
+    {
+        return add_query_arg(
+            ['concordance_flushed' => $flag],
+            admin_url('admin.php?page=concordance')
+        );
     }
 
     /**

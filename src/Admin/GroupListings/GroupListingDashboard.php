@@ -401,15 +401,28 @@ class GroupListingDashboard
             wp_die(esc_html__('Security check failed.', 'concordance'), '', ['response' => 403]);
         }
 
+        wp_safe_redirect($this->applySetIntergroup());
+        exit;
+    }
+
+    /**
+     * Store the submitted intergroup filter and work out where to go next.
+     *
+     * Split out of handleSetIntergroup() so it can be exercised without the
+     * bare exit() that follows the redirect. Behaviour is unchanged: the
+     * posted value is absint()-sanitised and written to the site-wide option,
+     * and the redirect target is the posted referer or the dashboard.
+     *
+     * @return string The URL to redirect back to.
+     */
+    private function applySetIntergroup(): string
+    {
         $value = isset($_POST['intergroup_id']) ? absint($_POST['intergroup_id']) : 0;
         update_option(ConcordanceConfiguration::OPTION_INTERGROUP_ID, $value);
 
-        $referer = isset($_POST['_wp_http_referer'])
+        return isset($_POST['_wp_http_referer'])
             ? esc_url_raw(wp_unslash($_POST['_wp_http_referer']))
             : admin_url('index.php');
-
-        wp_safe_redirect($referer);
-        exit;
     }
 
     /**
