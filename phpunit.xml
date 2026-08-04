@@ -13,14 +13,24 @@
         <include>
             <directory>src</directory>
         </include>
-        <exclude>
-            <!--
-                Admin screens: the settings page and the group-listing dashboard.
-                These are WordPress admin render/menu/AJAX glue exercised through
-                the admin UI at runtime, not in unit tests — the same exclusion
-                the other suite plugins apply to their src/Admin layers.
-            -->
-            <directory>src/Admin</directory>
-        </exclude>
+        <!--
+            There is deliberately no <exclude> here.
+
+            src/Admin used to be excluded as "WordPress admin render/menu/AJAX
+            glue exercised through the admin UI at runtime", which is what most
+            of the suite still says. Amber disproves it — it covers its entire
+            src/Admin on this same tooling — so the exclusion was habit, not
+            necessity, and it hid the API-client wiring behind the settings
+            screen and the dashboard widget from the coverage report.
+
+            Both classes are covered by tests/Unit/Admin. The one thing that
+            genuinely cannot run in-process is `wp_redirect(); exit;`: the stubs
+            record the redirect rather than throwing, so the exit would take
+            PHPUnit down with it. Where branchy logic sat in front of one of
+            those, it was split into a private method
+            (SettingsAdmin::resolveCacheFlushRedirect(),
+            GroupListingDashboard::applySetIntergroup()) and is driven through
+            reflection instead. Nothing is excluded to make a number look better.
+        -->
     </source>
 </phpunit>
