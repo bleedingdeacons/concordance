@@ -65,12 +65,14 @@ class GroupListingDashboardTest extends TestCase
     /** @test */
     public function the_constructor_registers_every_hook_the_widget_needs(): void
     {
-        foreach ([
+        foreach (
+            [
             'wp_dashboard_setup',
             'admin_head',
             'admin_post_concordance_set_intergroup',
             'wp_ajax_concordance_filter_intergroup',
-        ] as $hook) {
+            ] as $hook
+        ) {
             $this->assertActionAdded($hook, false, 'expected ' . $hook . ' to be hooked');
         }
     }

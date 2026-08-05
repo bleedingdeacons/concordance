@@ -9,10 +9,7 @@ if (!defined('ABSPATH')) {
 }
 
 use Psr\Container\ContainerInterface;
-use Psr\Container\NotFoundExceptionInterface;
-use Psr\Container\ContainerExceptionInterface;
 use Closure;
-use RuntimeException;
 
 /**
  * Class Container
@@ -92,18 +89,4 @@ class Container implements ContainerInterface
     {
         return isset($this->factories[$id]) || isset($this->instances[$id]);
     }
-}
-
-/**
- * Exception thrown when a requested service is not found in the container.
- */
-class NotFoundException extends RuntimeException implements NotFoundExceptionInterface
-{
-}
-
-/**
- * Exception thrown when an error occurs during service resolution.
- */
-class ContainerException extends RuntimeException implements ContainerExceptionInterface
-{
 }

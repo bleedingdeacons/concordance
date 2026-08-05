@@ -719,10 +719,7 @@ class SettingsAdmin
             'concordance_flush_cache_nonce'
         );
         ?>
-        <p><?php esc_html_e(
-            'Force-clear all cached API responses. Useful after the AAGBDB data has changed and you do not want to wait for the cache to expire.',
-            'concordance'
-        ); ?></p>
+        <p><?php esc_html_e('Force-clear all cached API responses. Useful after the AAGBDB data has changed and you do not want to wait for the cache to expire.', 'concordance'); ?></p>
         <p>
             <a href="<?php echo esc_url($flushUrl); ?>"
                class="button button-secondary"
@@ -744,7 +741,7 @@ class SettingsAdmin
     private function renderConnectionTest(): void
     {
         try {
-            if ( isset( $_GET['concordance_test'] ) && wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ?? '' ) ), 'concordance_test_nonce' ) ) {
+            if (isset($_GET['concordance_test']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'] ?? '')), 'concordance_test_nonce')) {
                 $result = $this->client->getGroups();
 
                 if (is_wp_error($result)) {
@@ -881,5 +878,4 @@ class SettingsAdmin
         </table>
         <?php
     }
-
 }

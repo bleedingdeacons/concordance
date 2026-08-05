@@ -124,7 +124,6 @@ class GroupListingManager
                 array_map(static fn(GroupListing $g) => $g->toArray(), $groups),
                 200
             );
-
         } catch (Exception $e) {
             // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
             error_log('Concordance REST Error: ' . $e->getMessage());
@@ -158,7 +157,6 @@ class GroupListingManager
             $group = GroupListing::fromArray($response);
 
             return new WP_REST_Response($group->toArray(), 200);
-
         } catch (Exception $e) {
             // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
             error_log('Concordance REST Error: ' . $e->getMessage());
@@ -168,5 +166,4 @@ class GroupListingManager
             );
         }
     }
-
 }

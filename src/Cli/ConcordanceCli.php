@@ -279,5 +279,4 @@ class ConcordanceCli extends WP_CLI_Command
     {
         WP_CLI::log('Concordance ' . CONCORDANCE_VERSION);
     }
-
 }

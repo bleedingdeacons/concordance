@@ -67,7 +67,6 @@ class ApiCache
             }
 
             return $result;
-
         } catch (Exception $e) {
             // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
             error_log('Concordance Cache Error: ' . $e->getMessage());
@@ -111,7 +110,6 @@ class ApiCache
             }
 
             return $result;
-
         } catch (Exception $e) {
             // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
             error_log('Concordance Cache Error: ' . $e->getMessage());
