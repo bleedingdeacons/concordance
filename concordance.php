@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 /**
  * Plugin Name: Concordance
  * Description: API client for the AAGBDB Groups API. Standalone plugin with PSR-11 container.
@@ -16,6 +14,8 @@ declare(strict_types=1);
  * Contact: thebleedingdeacons@gmail.com
  * License: GNU General Public License (GPL) version 2
  */
+
+declare(strict_types=1);
 
 if (!defined('ABSPATH')) {
     exit;
@@ -79,12 +79,13 @@ if (file_exists($concordance_autoloader)) {
  * @return \Psr\Container\ContainerInterface
  * @throws \RuntimeException If Concordance is not initialized
  */
-function concordance(): \Psr\Container\ContainerInterface {
+function concordance(): \Psr\Container\ContainerInterface
+{
     return \Concordance\Plugin::getContainer();
 }
 
 // Initialize on plugins_loaded — no external plugin dependency
-add_action('plugins_loaded', function() {
+add_action('plugins_loaded', function () {
     try {
         if (!class_exists('Concordance\Plugin')) {
             throw new \Exception('Concordance\Plugin class not found. Check that Plugin.php exists in the src/ directory.');
@@ -93,7 +94,6 @@ add_action('plugins_loaded', function() {
         \Concordance\Plugin::init();
 
         do_action('concordance/loaded', \Concordance\Plugin::getContainer());
-
     } catch (\Exception $e) {
         // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
         error_log('Concordance Plugin Initialization Error: ' . $e->getMessage());
@@ -101,7 +101,7 @@ add_action('plugins_loaded', function() {
         error_log('Concordance Plugin Stack Trace: ' . $e->getTraceAsString());
 
         if (is_admin()) {
-            add_action('admin_notices', function() use ($e) {
+            add_action('admin_notices', function () use ($e) {
                 $message = sprintf(
                     '<strong>Concordance Plugin Error:</strong> %s',
                     esc_html($e->getMessage())
@@ -111,7 +111,6 @@ add_action('plugins_loaded', function() {
         }
 
         return;
-
     } catch (\Throwable $e) {
         // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
         error_log('Concordance Plugin Fatal Error: ' . $e->getMessage());
@@ -119,7 +118,7 @@ add_action('plugins_loaded', function() {
         error_log('Concordance Plugin Stack Trace: ' . $e->getTraceAsString());
 
         if (is_admin()) {
-            add_action('admin_notices', function() {
+            add_action('admin_notices', function () {
                 echo '<div class="notice notice-error is-dismissible"><p><strong>Concordance Plugin Fatal Error:</strong> Plugin failed to load. Check error logs.</p></div>';
             });
         }
