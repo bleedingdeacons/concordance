@@ -19,10 +19,11 @@
         "psr/container": "^2.0"
     },
     "require-dev": {
-        "bleedingdeacons/wp-mocks": "^1.1.1",
+        "bleedingdeacons/wp-mocks": "^1.5.2",
         "php-stubs/wp-cli-stubs": "^2.12",
         "phpstan/phpstan": "^2.0",
         "phpunit/phpunit": "^10.0",
+        "squizlabs/php_codesniffer": "^4.0",
         "szepeviktor/phpstan-wordpress": "^2.0"
     },
     "autoload": {
@@ -41,6 +42,8 @@
         "build:dev": "php build.php build:dev",
         "build:clean": "php build.php clean",
         "test": "phpunit",
+        "phpcs": "phpcs --standard=.phpcs.xml.dist",
+        "phpcs:fix": "phpcbf --standard=.phpcs.xml.dist",
         "phpstan": "phpstan analyse --memory-limit=1G"
     },
     "config": {
