@@ -133,7 +133,19 @@ class ApiClient
             ];
 
             if (!empty($body) && in_array($args['method'], ['POST', 'PUT', 'PATCH'], true)) {
-                $args['body'] = wp_json_encode($body);
+                $encodedBody = wp_json_encode($body);
+
+                // Sending the request without its body would be worse than
+                // not sending it: the endpoint would see a well-formed write
+                // with nothing in it.
+                if ($encodedBody === false) {
+                    return new WP_Error(
+                        'concordance_encode_failed',
+                        'Could not JSON-encode the request body.'
+                    );
+                }
+
+                $args['body'] = $encodedBody;
             }
 
             $response = wp_remote_request($url, $args);

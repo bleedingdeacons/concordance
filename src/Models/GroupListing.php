@@ -226,7 +226,11 @@ class GroupListing implements JsonSerializable
             return $this->lastUpdate;
         }
 
-        return wp_date('d/m/Y', $timestamp);
+        // wp_date() is string|false. Fall back to the raw value, matching
+        // what the unparseable-timestamp branch above already does.
+        $formatted = wp_date('d/m/Y', $timestamp);
+
+        return $formatted === false ? $this->lastUpdate : $formatted;
     }
 
     /**

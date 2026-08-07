@@ -53,7 +53,15 @@ class ApiCache
                 return $this->client->getGroups($queryArgs);
             }
 
-            $cacheKey = ConcordanceConfiguration::CACHE_PREFIX . 'groups_' . md5(wp_json_encode($queryArgs));
+            // wp_json_encode() can fail, and md5(false) is md5('') — every
+            // distinct query would then share one cache key and be served
+            // another query's results. Bypass the cache rather than risk that.
+            $encodedArgs = wp_json_encode($queryArgs);
+            if ($encodedArgs === false) {
+                return $this->client->getGroups($queryArgs);
+            }
+
+            $cacheKey = ConcordanceConfiguration::CACHE_PREFIX . 'groups_' . md5($encodedArgs);
             $cached = get_transient($cacheKey);
 
             if (false !== $cached) {
