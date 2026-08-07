@@ -44,4 +44,5 @@ parameters:
         -
             message: '#Comparison operation ">" between int<0, max> and 0 is always true#'
             path: src/Models/GroupListing.php
-        - '#Function get_plugin_data not found#'
+        # A get_plugin_data entry used to follow. Removed once wordpress-stubs
+        # resolved it and it stopped matching.
