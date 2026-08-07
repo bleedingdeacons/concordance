@@ -3,8 +3,8 @@ Contributors: thebleedingdeacons
 Tags: api, groups, directory, listings, aagbdb
 Requires at least: 6.0
 Tested up to: 6.9
-Stable tag: 1.9.5
-Build date: 2026/08/07 15:54:28
+Stable tag: 1.9.6
+Build date: 2026/08/07 17:47:43
 Requires PHP: 8.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
