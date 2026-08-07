@@ -89,7 +89,11 @@ class ConcordanceCli extends WP_CLI_Command
         }
 
         if (is_wp_error($result)) {
+            // WP_CLI::error() exits, but only when its $exit argument is left
+            // at the default — nothing in the signature says so. The explicit
+            // return states the intent and lets the type checker follow it.
             WP_CLI::error($result->get_error_message());
+            return;
         }
 
         $groups = GroupListing::collectionFromResponse($result);
@@ -164,7 +168,9 @@ class ConcordanceCli extends WP_CLI_Command
         $result = $this->client->getGroup($args[0]);
 
         if (is_wp_error($result)) {
+            // See list_groups() on why the return is explicit.
             WP_CLI::error($result->get_error_message());
+            return;
         }
 
         if (empty($result)) {
@@ -203,7 +209,9 @@ class ConcordanceCli extends WP_CLI_Command
         $result = $this->client->getGroups();
 
         if (is_wp_error($result)) {
+            // See list_groups() on why the return is explicit.
             WP_CLI::error('Connection failed: ' . $result->get_error_message());
+            return;
         }
 
         $groups = GroupListing::collectionFromResponse($result);
