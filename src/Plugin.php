@@ -127,7 +127,7 @@ class Plugin
      */
     private static function registerCliCommands(): void
     {
-        $cli = self::$container->get(ConcordanceCli::class);
+        $cli = self::getContainer()->get(ConcordanceCli::class);
         \WP_CLI::add_command('concordance', $cli);
     }
 
