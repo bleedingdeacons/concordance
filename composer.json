@@ -19,7 +19,7 @@
         "psr/container": "^2.0"
     },
     "require-dev": {
-        "bleedingdeacons/wp-mocks": "^1.5.2",
+        "bleedingdeacons/wp-mocks": "^2.0",
         "php-stubs/wp-cli-stubs": "^2.12",
         "phpstan/phpstan": "^2.0",
         "phpunit/phpunit": "^10.0",
