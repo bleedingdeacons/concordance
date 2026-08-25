@@ -152,8 +152,15 @@ class EncryptionTest extends TestCase
 
         $encrypted = $enc->encrypt('secret');
 
-        // Flip a character in the base64 payload
-        $tampered = substr($encrypted, 0, 20) . 'X' . substr($encrypted, 21);
+        // Flip a character in the base64 payload. The replacement is chosen
+        // against the original rather than hardcoded: index 20 falls inside
+        // the base64 of the random IV, so a fixed 'X' leaves the payload
+        // untouched roughly one run in sixty-four - base64 has a 64-character
+        // alphabet - and the assertion then fails because undamaged data
+        // decrypts perfectly well. Same idiom as reach's SessionCookieTest.
+        $tampered = substr($encrypted, 0, 20)
+            . ($encrypted[20] === 'X' ? 'Y' : 'X')
+            . substr($encrypted, 21);
 
         $this->assertSame('', $enc->decrypt($tampered));
     }
