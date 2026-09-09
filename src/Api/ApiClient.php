@@ -10,6 +10,7 @@ if (!defined('ABSPATH')) {
 
 use Concordance\Common\ConcordanceConfiguration;
 use Concordance\Common\Encryption;
+use Concordance\Common\UserAgent;
 use WP_Error;
 use Exception;
 
@@ -129,6 +130,10 @@ class ApiClient
             $args = [
                 'method'  => strtoupper($method),
                 'timeout' => $this->timeout,
+                // Names the plugin, its version, a contact address and the
+                // deployment making the call, so the API sees a request
+                // that introduces itself rather than a generic WordPress.
+                'user-agent' => UserAgent::plugin(),
                 'headers' => $this->buildHeaders(),
             ];
 
