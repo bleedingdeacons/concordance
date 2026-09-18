@@ -233,8 +233,16 @@ class ConcordanceCli extends WP_CLI_Command
      */
     public function flush_cache(array $args, array $assocArgs): void
     {
-        $deleted = $this->cache->flush();
-        WP_CLI::success(sprintf('Cleared %d cached entries.', $deleted));
+        // No count: the flush advances a cache generation rather than deleting
+        // rows, so nothing is enumerated. What it used to print was a count of
+        // deleted wp_options rows, which was zero on any site with a
+        // persistent object cache however much was cached.
+        if (!$this->cache->flush()) {
+            WP_CLI::warning('Cache flush did not complete: the cache version could not be written.');
+            return;
+        }
+
+        WP_CLI::success('Cache flushed.');
     }
 
     /**

@@ -46,6 +46,13 @@ final class ConcordanceConfiguration
     /** @var string Transient prefix for cached responses */
     public const CACHE_PREFIX = 'concordance_';
 
+    /**
+     * @var string Option holding the cache generation, which every cache key
+     *             carries. Flushing increments it, so every existing key
+     *             becomes unreachable at once — see ApiCache::flush().
+     */
+    public const OPTION_CACHE_VERSION = 'concordance_cache_version';
+
     /** @var string REST API namespace */
     public const REST_NAMESPACE = 'concordance/v1';
 

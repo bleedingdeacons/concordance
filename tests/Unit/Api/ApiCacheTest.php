@@ -91,11 +91,62 @@ class ApiCacheTest extends TestCase
         $this->assertSame([], WpState::$transients);
     }
 
-    public function testFlushRunsTheDeleteQuery(): void
+    public function testFlushAdvancesTheCacheGeneration(): void
     {
-        $this->wpdb->queryResult = 7;
-        $this->assertSame(7, $this->cache->flush());
-        $this->assertNotEmpty($this->wpdb->queries);
+        $this->assertTrue($this->cache->flush());
+        $this->assertSame(2, WpState::$options['concordance_cache_version']);
+
+        $this->assertTrue($this->cache->flush());
+        $this->assertSame(3, WpState::$options['concordance_cache_version']);
+    }
+
+    public function testFlushTouchesNoDatabaseRows(): void
+    {
+        $this->cache->flush();
+
+        // It used to DELETE the transient rows straight out of wp_options,
+        // which cleared nothing once a persistent object cache moved
+        // transients out of the database -- and reported success while doing
+        // it.
+        $this->assertSame([], $this->wpdb->queries);
+    }
+
+    public function testAFlushedEntryIsNotServedAgain(): void
+    {
+        $this->client->expects($this->exactly(2))->method('getGroup')->with('42')->willReturn(['id' => 42]);
+
+        $this->assertSame(['id' => 42], $this->cache->getGroup('42', 600));
+        $this->assertSame(['id' => 42], $this->cache->getGroup('42', 600)); // served from cache
+
+        $this->cache->flush();
+
+        // The entry is still in the transient store, and unreachable: the key
+        // it was written under belongs to the previous generation.
+        $this->assertNotEmpty(WpState::$transients);
+        $this->assertSame(['id' => 42], $this->cache->getGroup('42', 600));
+    }
+
+    public function testKeysCarryTheGeneration(): void
+    {
+        WpState::$options['concordance_cache_version'] = 7;
+        $this->client->method('getGroup')->willReturn(['id' => 1]);
+
+        $this->cache->getGroup('1', 600);
+
+        $keys = array_keys(WpState::$transients);
+        $this->assertCount(1, $keys);
+        $this->assertStringStartsWith('concordance_v7_group_', $keys[0]);
+    }
+
+    public function testAMangledGenerationOptionReadsAsTheFirst(): void
+    {
+        WpState::$options['concordance_cache_version'] = 'nonsense';
+        $this->client->method('getGroup')->willReturn(['id' => 1]);
+
+        $this->cache->getGroup('1', 600);
+
+        $keys = array_keys(WpState::$transients);
+        $this->assertStringStartsWith('concordance_v1_group_', $keys[0]);
     }
 
     public function testGetGroupsWrapsAnUnexpectedException(): void

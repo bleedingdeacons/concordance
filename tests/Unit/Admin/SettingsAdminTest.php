@@ -626,9 +626,26 @@ class SettingsAdminTest extends TestCase
             'rejected nonce'    => ['invalid', 'invalid security token', 'notice-error'],
             'no cache service'  => ['unavailable', 'Cache service is unavailable', 'notice-error'],
             'flush threw'       => ['error', 'Cache flush failed', 'notice-error'],
-            'nothing cached'    => ['0', 'Cache flushed: 0 cached entries cleared.', 'notice-success'],
-            'several cleared'   => ['12', 'Cache flushed: 12 cached entries cleared.', 'notice-success'],
+            'flushed'           => ['cleared', 'Cache flushed.', 'notice-success'],
         ];
+    }
+
+    /**
+     * A count is no longer a flag: flushing advances a generation, so there is
+     * nothing to count. A link from before that change carries a digit, and
+     * rendering nothing beats reporting a number that was always zero on a
+     * site with an object cache.
+     *
+     * @test
+     */
+    public function a_stale_numeric_flush_flag_renders_no_notice(): void
+    {
+        $_GET['concordance_flushed'] = '12';
+
+        $this->assertStringNotContainsString(
+            'is-dismissible',
+            $this->render([$this->admin, 'renderSettingsPage'])
+        );
     }
 
     /** @test */
@@ -822,12 +839,21 @@ class SettingsAdminTest extends TestCase
     }
 
     /** @test */
-    public function a_successful_flush_reports_how_many_entries_were_cleared(): void
+    public function a_successful_flush_says_so(): void
     {
         $_GET = $this->validFlushRequest();
-        $this->cache->expects($this->once())->method('flush')->willReturn(12);
+        $this->cache->expects($this->once())->method('flush')->willReturn(true);
 
-        $this->assertStringContainsString('concordance_flushed=12', (string) $this->resolveFlush());
+        $this->assertStringContainsString('concordance_flushed=cleared', (string) $this->resolveFlush());
+    }
+
+    /** @test */
+    public function a_flush_that_could_not_write_the_version_reports_an_error(): void
+    {
+        $_GET = $this->validFlushRequest();
+        $this->cache->expects($this->once())->method('flush')->willReturn(false);
+
+        $this->assertStringContainsString('concordance_flushed=error', (string) $this->resolveFlush());
     }
 
     /** @test */
@@ -843,7 +869,7 @@ class SettingsAdminTest extends TestCase
     public function the_flush_redirect_lands_back_on_the_settings_page(): void
     {
         $_GET = $this->validFlushRequest();
-        $this->cache->method('flush')->willReturn(0);
+        $this->cache->method('flush')->willReturn(true);
 
         $target = (string) $this->resolveFlush();
 
