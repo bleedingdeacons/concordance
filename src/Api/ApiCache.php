@@ -17,6 +17,7 @@ use function get_transient;
 use function is_wp_error;
 use function md5;
 use function set_transient;
+use function update_option;
 use function wp_json_encode;
 
 /**
@@ -61,7 +62,7 @@ class ApiCache
                 return $this->client->getGroups($queryArgs);
             }
 
-            $cacheKey = ConcordanceConfiguration::CACHE_PREFIX . 'groups_' . md5($encodedArgs);
+            $cacheKey = $this->cacheKey('groups_' . md5($encodedArgs));
             $cached = get_transient($cacheKey);
 
             if (false !== $cached) {
@@ -104,7 +105,7 @@ class ApiCache
                 return $this->client->getGroup($groupId);
             }
 
-            $cacheKey = ConcordanceConfiguration::CACHE_PREFIX . 'group_' . md5((string) $groupId);
+            $cacheKey = $this->cacheKey('group_' . md5((string) $groupId));
             $cached = get_transient($cacheKey);
 
             if (false !== $cached) {
@@ -129,23 +130,49 @@ class ApiCache
     }
 
     /**
-     * Flush all Concordance transient caches.
+     * Flush every cached response.
      *
-     * @return int Number of deleted transient rows.
+     * Increments the generation every cache key carries, which puts the whole
+     * cache out of reach in one option write. The orphaned entries are never
+     * read again and expire on their own TTL.
+     *
+     * This used to DELETE the transient rows out of wp_options directly, which
+     * worked only for as long as transients lived in the database. With a
+     * persistent object cache set_transient() writes to the cache instead, no
+     * rows exist to match, and that DELETE cleared nothing while reporting
+     * success -- the failure looked exactly like an already-empty cache. The
+     * keys here are md5 hashes of query arguments, so enumerating them to
+     * delete one by one was never an option either.
+     *
+     * @return bool Whether the generation was advanced.
      */
-    public function flush(): int
+    public function flush(): bool
     {
-        global $wpdb;
-
-        $prefix = ConcordanceConfiguration::CACHE_PREFIX;
-
-        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Bulk transient cleanup has no caching API equivalent.
-        return (int) $wpdb->query(
-            $wpdb->prepare(
-                "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
-                '_transient_' . $prefix . '%',
-                '_transient_timeout_' . $prefix . '%'
-            )
+        return update_option(
+            ConcordanceConfiguration::OPTION_CACHE_VERSION,
+            $this->cacheVersion() + 1
         );
+    }
+
+    /**
+     * Prefix a key with the plugin prefix and the current generation.
+     */
+    private function cacheKey(string $name): string
+    {
+        return ConcordanceConfiguration::CACHE_PREFIX . 'v' . $this->cacheVersion() . '_' . $name;
+    }
+
+    /**
+     * The current cache generation, counting from 1.
+     *
+     * Anything below 1 -- an absent option, a hand-edited row, a value that
+     * came back as something other than a number -- reads as 1 rather than 0,
+     * so the key shape stays the same however the option is mangled.
+     */
+    private function cacheVersion(): int
+    {
+        $version = (int) get_option(ConcordanceConfiguration::OPTION_CACHE_VERSION, 1);
+
+        return $version > 0 ? $version : 1;
     }
 }

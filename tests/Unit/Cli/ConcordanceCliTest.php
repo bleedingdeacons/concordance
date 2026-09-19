@@ -134,11 +134,18 @@ class ConcordanceCliTest extends TestCase
         $this->cli->test([], []);
     }
 
-    public function testFlushCacheReportsCount(): void
+    public function testFlushCacheReportsSuccess(): void
     {
-        $this->cache->method('flush')->willReturn(3);
+        $this->cache->method('flush')->willReturn(true);
         $this->cli->flush_cache([], []);
         $this->assertSame('success', $GLOBALS['conc_cli_log'][0][0]);
+    }
+
+    public function testFlushCacheWarnsWhenTheVersionCouldNotBeWritten(): void
+    {
+        $this->cache->method('flush')->willReturn(false);
+        $this->cli->flush_cache([], []);
+        $this->assertSame('warning', $GLOBALS['conc_cli_log'][0][0]);
     }
 
     public function testConfigFormatsSettings(): void

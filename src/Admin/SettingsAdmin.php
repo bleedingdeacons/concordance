@@ -599,7 +599,7 @@ class SettingsAdmin
         }
 
         try {
-            return $this->cacheFlushRedirectUrl((string) $this->cache->flush());
+            return $this->cacheFlushRedirectUrl($this->cache->flush() ? 'cleared' : 'error');
         } catch (Exception $e) {
             return $this->cacheFlushRedirectUrl('error');
         }
@@ -694,11 +694,13 @@ class SettingsAdmin
             return;
         }
 
-        if (ctype_digit($flag)) {
-            $count = (int) $flag;
+        // No count any more: flushing advances a generation rather than
+        // deleting rows, so there is no number to report. The old one counted
+        // deleted wp_options rows, which on a site with an object cache was
+        // always zero however much had actually been cached.
+        if ($flag === 'cleared') {
             echo '<div class="notice notice-success is-dismissible"><p>'
-                /* translators: %d: number of cached entries cleared */
-                . sprintf(esc_html__('Cache flushed: %d cached entries cleared.', 'concordance'), $count)
+                . esc_html__('Cache flushed.', 'concordance')
                 . '</p></div>';
         }
     }
