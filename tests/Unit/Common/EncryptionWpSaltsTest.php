@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace Concordance\Tests\Unit\Common;
 
+use PHPUnit\Framework\Attributes\CoversClass;
 use Concordance\Common\Encryption;
 use PHPUnit\Framework\TestCase;
 
 /**
  * Covers the no-key constructor path, which derives the key from the WordPress
  * AUTH_KEY / SECURE_AUTH_KEY salts (defined in the test bootstrap).
- *
- * @covers \Concordance\Common\Encryption
  */
+#[CoversClass(\Concordance\Common\Encryption::class)]
 class EncryptionWpSaltsTest extends TestCase
 {
     public function testRoundTripWithWordPressSaltKey(): void

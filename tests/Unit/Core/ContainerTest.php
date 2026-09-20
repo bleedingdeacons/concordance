@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Concordance\Tests\Unit\Core;
 
+use PHPUnit\Framework\Attributes\Test;
+use Psr\Container\NotFoundExceptionInterface;
+use Psr\Container\ContainerExceptionInterface;
 use Concordance\Core\Container;
 use Concordance\Core\ContainerException;
 use Concordance\Core\NotFoundException;
@@ -17,8 +20,7 @@ use PHPUnit\Framework\TestCase;
 class ContainerTest extends TestCase
 {
     // ── Registration & resolution ───────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function get_resolves_a_registered_service(): void
     {
         $container = new Container();
@@ -27,7 +29,7 @@ class ContainerTest extends TestCase
         $this->assertSame('hello', $container->get('greeting'));
     }
 
-    /** @test */
+    #[Test]
     public function get_resolves_singleton_returning_same_instance(): void
     {
         $container = new Container();
@@ -39,7 +41,7 @@ class ContainerTest extends TestCase
         $this->assertSame($first, $second);
     }
 
-    /** @test */
+    #[Test]
     public function factory_receives_container_as_argument(): void
     {
         $container = new Container();
@@ -49,7 +51,7 @@ class ContainerTest extends TestCase
         $this->assertSame('got:dependency-value', $container->get('service'));
     }
 
-    /** @test */
+    #[Test]
     public function factory_is_called_lazily_not_at_registration(): void
     {
         $called = false;
@@ -66,8 +68,7 @@ class ContainerTest extends TestCase
     }
 
     // ── has() ───────────────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function has_returns_true_for_registered_service(): void
     {
         $container = new Container();
@@ -76,7 +77,7 @@ class ContainerTest extends TestCase
         $this->assertTrue($container->has('exists'));
     }
 
-    /** @test */
+    #[Test]
     public function has_returns_false_for_unregistered_service(): void
     {
         $container = new Container();
@@ -84,7 +85,7 @@ class ContainerTest extends TestCase
         $this->assertFalse($container->has('nope'));
     }
 
-    /** @test */
+    #[Test]
     public function has_returns_true_after_resolution(): void
     {
         $container = new Container();
@@ -95,8 +96,7 @@ class ContainerTest extends TestCase
     }
 
     // ── Re-registration ─────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function re_registering_clears_cached_instance(): void
     {
         $container = new Container();
@@ -110,8 +110,7 @@ class ContainerTest extends TestCase
     }
 
     // ── Exceptions ──────────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function get_throws_NotFoundException_for_unknown_service(): void
     {
         $container = new Container();
@@ -122,15 +121,15 @@ class ContainerTest extends TestCase
         $container->get('unknown');
     }
 
-    /** @test */
+    #[Test]
     public function NotFoundException_implements_psr_interface(): void
     {
         $e = new NotFoundException('test');
 
-        $this->assertInstanceOf(\Psr\Container\NotFoundExceptionInterface::class, $e);
+        $this->assertInstanceOf(NotFoundExceptionInterface::class, $e);
     }
 
-    /** @test */
+    #[Test]
     public function get_throws_ContainerException_when_factory_throws(): void
     {
         $container = new Container();
@@ -144,15 +143,15 @@ class ContainerTest extends TestCase
         $container->get('broken');
     }
 
-    /** @test */
+    #[Test]
     public function ContainerException_implements_psr_interface(): void
     {
         $e = new ContainerException('test');
 
-        $this->assertInstanceOf(\Psr\Container\ContainerExceptionInterface::class, $e);
+        $this->assertInstanceOf(ContainerExceptionInterface::class, $e);
     }
 
-    /** @test */
+    #[Test]
     public function ContainerException_wraps_original_exception(): void
     {
         $container = new Container();

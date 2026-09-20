@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace Concordance\Tests\Unit\Admin;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\MockObject\MockObject;
+use function Brain\Monkey\Functions\when;
 use BleedingDeacons\WpMocks\TestCase;
 use BleedingDeacons\WpMocks\WpState;
-use Brain\Monkey\Functions;
 use Concordance\Admin\SettingsAdmin;
 use Concordance\Api\ApiCache;
 use Concordance\Api\ApiClient;
@@ -43,15 +47,14 @@ use WP_Error;
  *
  * Nothing here touches the network: ApiClient and ApiCache are both doubles,
  * and no real credential is ever stored or printed.
- *
- * @covers \Concordance\Admin\SettingsAdmin
  */
+#[CoversClass(\Concordance\Admin\SettingsAdmin::class)]
 class SettingsAdminTest extends TestCase
 {
-    /** @var ApiClient&\PHPUnit\Framework\MockObject\MockObject */
+    /** @var ApiClient&MockObject */
     private $client;
 
-    /** @var ApiCache&\PHPUnit\Framework\MockObject\MockObject */
+    /** @var ApiCache&MockObject */
     private $cache;
 
     private SettingsAdmin $admin;
@@ -97,13 +100,13 @@ class SettingsAdminTest extends TestCase
      */
     private function stubSettingsApi(): void
     {
-        Functions\when('register_setting')->alias(
+        when('register_setting')->alias(
             function (string $group, string $name, array $args = []): void {
                 $this->settings[$name] = ['group' => $group, 'args' => $args];
             }
         );
 
-        Functions\when('add_settings_section')->alias(
+        when('add_settings_section')->alias(
             function (string $id, string $title, mixed $callback, string $page): void {
                 $this->sections[] = ['id' => $id, 'page' => $page];
                 if (is_callable($callback)) {
@@ -114,7 +117,7 @@ class SettingsAdminTest extends TestCase
             }
         );
 
-        Functions\when('add_settings_field')->alias(
+        when('add_settings_field')->alias(
             function (string $id, string $title, mixed $callback, string $page, string $section = ''): void {
                 $this->fields[] = [
                     'id' => $id, 'page' => $page, 'section' => $section, 'callback' => $callback,
@@ -122,20 +125,19 @@ class SettingsAdminTest extends TestCase
             }
         );
 
-        Functions\when('settings_fields')->justReturn(null);
-        Functions\when('do_settings_sections')->justReturn(null);
-        Functions\when('submit_button')->alias(static function (string $text = 'Save'): void {
+        when('settings_fields')->justReturn(null);
+        when('do_settings_sections')->justReturn(null);
+        when('submit_button')->alias(static function (string $text = 'Save'): void {
             echo '<button type="submit">' . $text . '</button>';
         });
-        Functions\when('get_admin_page_title')->justReturn('Concordance');
-        Functions\when('wp_nonce_url')->alias(
+        when('get_admin_page_title')->justReturn('Concordance');
+        when('wp_nonce_url')->alias(
             static fn (string $url, string $action = ''): string => $url . '&_wpnonce=nonce-' . $action
         );
     }
 
     // ── registration ──────────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function the_constructor_registers_every_admin_hook(): void
     {
         foreach (['admin_menu', 'admin_init', 'admin_footer'] as $hook) {
@@ -148,7 +150,7 @@ class SettingsAdminTest extends TestCase
         $this->assertActionAdded('admin_init', [$this->admin, 'handleCacheFlush']);
     }
 
-    /** @test */
+    #[Test]
     public function register_menu_adds_the_top_level_page_and_two_submenus(): void
     {
         $this->admin->registerMenu();
@@ -164,7 +166,7 @@ class SettingsAdminTest extends TestCase
         }
     }
 
-    /** @test */
+    #[Test]
     public function register_settings_registers_every_option_in_one_group(): void
     {
         $this->admin->registerSettings();
@@ -187,9 +189,8 @@ class SettingsAdminTest extends TestCase
     /**
      * The API key must never be written to wp_options in the clear, so its
      * sanitize callback is the encryption step rather than a formatting one.
-     *
-     * @test
      */
+    #[Test]
     public function the_api_key_is_encrypted_by_its_sanitize_callback(): void
     {
         $this->admin->registerSettings();
@@ -199,7 +200,7 @@ class SettingsAdminTest extends TestCase
         $this->assertSame([$this->admin, 'sanitizeAndEncryptApiKey'], $callback);
     }
 
-    /** @test */
+    #[Test]
     public function register_settings_builds_two_sections_and_six_fields(): void
     {
         $this->admin->registerSettings();
@@ -229,15 +230,14 @@ class SettingsAdminTest extends TestCase
     }
 
     // ── sanitize callbacks ────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function an_empty_api_key_is_stored_as_an_empty_string(): void
     {
         $this->assertSame('', $this->admin->sanitizeAndEncryptApiKey(''));
         $this->assertSame('', $this->admin->sanitizeAndEncryptApiKey(null));
     }
 
-    /** @test */
+    #[Test]
     public function a_new_api_key_is_encrypted_before_storage(): void
     {
         $encryption = new Encryption();
@@ -253,9 +253,8 @@ class SettingsAdminTest extends TestCase
      * The settings form round-trips the stored value, so resubmitting an
      * untouched field hands the callback something already encrypted. Encrypting
      * it a second time would make the key undecryptable.
-     *
-     * @test
      */
+    #[Test]
     public function an_already_encrypted_api_key_is_not_encrypted_twice(): void
     {
         $encryption = new Encryption();
@@ -265,11 +264,11 @@ class SettingsAdminTest extends TestCase
     }
 
     /**
-     * @test
-     * @dataProvider dashboardFieldSubmissions
      * @param mixed         $input
      * @param array<string> $expected
      */
+    #[DataProvider('dashboardFieldSubmissions')]
+    #[Test]
     public function the_dashboard_fields_setting_is_filtered_to_the_whitelist(mixed $input, array $expected): void
     {
         $this->assertSame($expected, $this->admin->sanitizeDashboardFields($input));
@@ -292,8 +291,7 @@ class SettingsAdminTest extends TestCase
     }
 
     // ── field rendering ───────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function the_api_key_field_shows_the_decrypted_value_in_a_password_input(): void
     {
         $encryption = new Encryption();
@@ -311,9 +309,8 @@ class SettingsAdminTest extends TestCase
      * so rather than implying the key is encrypted at rest. OpenSSL is loaded
      * in this environment, so only the reassuring branch is assertable — the
      * warning's absence is the assertion.
-     *
-     * @test
      */
+    #[Test]
     public function the_api_key_field_warns_only_when_openssl_is_missing(): void
     {
         $html = $this->render([$this->admin, 'renderApiKeyField']);
@@ -325,7 +322,7 @@ class SettingsAdminTest extends TestCase
         }
     }
 
-    /** @test */
+    #[Test]
     public function the_numeric_fields_fall_back_to_their_documented_defaults(): void
     {
         $ttl     = $this->render([$this->admin, 'renderCacheTtlField']);
@@ -343,7 +340,7 @@ class SettingsAdminTest extends TestCase
         $this->assertStringContainsString('min="1"', $timeout);
     }
 
-    /** @test */
+    #[Test]
     public function the_numeric_fields_show_the_saved_values(): void
     {
         WpState::$options[ConcordanceConfiguration::OPTION_CACHE_TTL]        = 120;
@@ -353,7 +350,7 @@ class SettingsAdminTest extends TestCase
         $this->assertStringContainsString('value="5"', $this->render([$this->admin, 'renderRequestTimeoutField']));
     }
 
-    /** @test */
+    #[Test]
     public function the_base_url_field_defaults_to_the_aagbdb_api(): void
     {
         $html = $this->render([$this->admin, 'renderApiBaseUrlField']);
@@ -365,7 +362,7 @@ class SettingsAdminTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function the_base_url_field_shows_the_saved_value(): void
     {
         WpState::$options[ConcordanceConfiguration::OPTION_API_BASE_URL] = 'https://staging.example.test/api';
@@ -376,7 +373,7 @@ class SettingsAdminTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function the_dashboard_fields_grid_ticks_the_saved_selection(): void
     {
         WpState::$options[ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS] = ['town'];
@@ -401,9 +398,8 @@ class SettingsAdminTest extends TestCase
     /**
      * A corrupted option (say, a string where a list belongs) must not blank
      * the grid — the defaults stand in.
-     *
-     * @test
      */
+    #[Test]
     public function a_non_array_dashboard_fields_option_falls_back_to_the_defaults(): void
     {
         WpState::$options[ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS] = 'corrupted';
@@ -416,8 +412,7 @@ class SettingsAdminTest extends TestCase
     }
 
     // ── the intergroup dropdown (built from cached API data) ──────────
-
-    /** @test */
+    #[Test]
     public function the_intergroup_dropdown_lists_the_intergroups_the_api_returned(): void
     {
         $this->cache->method('getGroups')->willReturn($this->groupsResponse());
@@ -433,9 +428,8 @@ class SettingsAdminTest extends TestCase
     /**
      * Sorted alphabetically by name rather than by id, because the id order
      * the API happens to return is meaningless to the person picking one.
-     *
-     * @test
      */
+    #[Test]
     public function the_intergroup_dropdown_is_sorted_by_name(): void
     {
         $this->cache->method('getGroups')->willReturn($this->groupsResponse());
@@ -449,7 +443,7 @@ class SettingsAdminTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function the_saved_intergroup_is_preselected(): void
     {
         WpState::$options[ConcordanceConfiguration::OPTION_INTERGROUP_ID] = 9;
@@ -461,7 +455,7 @@ class SettingsAdminTest extends TestCase
         $this->assertStringNotContainsString('<option value="0" selected>', $html);
     }
 
-    /** @test */
+    #[Test]
     public function the_all_sentinel_is_selected_by_default(): void
     {
         $this->cache->method('getGroups')->willReturn($this->groupsResponse());
@@ -477,9 +471,8 @@ class SettingsAdminTest extends TestCase
     /**
      * An intergroup with no usable name still needs a label, or it renders as
      * an empty, unpickable row.
-     *
-     * @test
      */
+    #[Test]
     public function an_unnamed_intergroup_falls_back_to_its_id(): void
     {
         $this->cache->method('getGroups')->willReturn([
@@ -492,7 +485,7 @@ class SettingsAdminTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function intergroups_are_deduplicated_and_unidentified_ones_skipped(): void
     {
         $this->cache->method('getGroups')->willReturn([
@@ -507,10 +500,8 @@ class SettingsAdminTest extends TestCase
         $this->assertStringNotContainsString('Unassigned', $html, 'intergroup id 0 is the "all" sentinel');
     }
 
-    /**
-     * @test
-     * @dataProvider emptyIntergroupSources
-     */
+    #[DataProvider('emptyIntergroupSources')]
+    #[Test]
     public function an_empty_choice_list_still_renders_a_usable_dropdown(
         callable $configure,
         bool $withCache
@@ -554,9 +545,8 @@ class SettingsAdminTest extends TestCase
     /**
      * A saved intergroup that the (empty) cache cannot name must stay visible,
      * or saving the form would silently reset the filter to "All".
-     *
-     * @test
      */
+    #[Test]
     public function a_saved_intergroup_survives_an_empty_choice_list(): void
     {
         WpState::$options[ConcordanceConfiguration::OPTION_INTERGROUP_ID] = 42;
@@ -569,8 +559,7 @@ class SettingsAdminTest extends TestCase
     }
 
     // ── the full settings page ────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function the_settings_page_renders_nothing_without_the_capability(): void
     {
         WpState::$userCan = false;
@@ -578,7 +567,7 @@ class SettingsAdminTest extends TestCase
         $this->assertSame('', $this->render([$this->admin, 'renderSettingsPage']));
     }
 
-    /** @test */
+    #[Test]
     public function the_settings_page_renders_all_four_of_its_sections(): void
     {
         $html = $this->render([$this->admin, 'renderSettingsPage']);
@@ -591,7 +580,7 @@ class SettingsAdminTest extends TestCase
         $this->assertStringContainsString('wp concordance flush-cache', $html);
     }
 
-    /** @test */
+    #[Test]
     public function the_flush_cache_link_carries_its_own_nonce(): void
     {
         $html = $this->render([$this->admin, 'renderSettingsPage']);
@@ -602,10 +591,8 @@ class SettingsAdminTest extends TestCase
         $this->assertStringContainsString('_wpnonce=nonce-concordance_test_nonce', $html);
     }
 
-    /**
-     * @test
-     * @dataProvider flushResultFlags
-     */
+    #[DataProvider('flushResultFlags')]
+    #[Test]
     public function the_cache_flush_result_is_reported_back_on_the_page(
         string $flag,
         string $expected,
@@ -635,9 +622,8 @@ class SettingsAdminTest extends TestCase
      * nothing to count. A link from before that change carries a digit, and
      * rendering nothing beats reporting a number that was always zero on a
      * site with an object cache.
-     *
-     * @test
      */
+    #[Test]
     public function a_stale_numeric_flush_flag_renders_no_notice(): void
     {
         $_GET['concordance_flushed'] = '12';
@@ -648,7 +634,7 @@ class SettingsAdminTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function an_unrecognised_flush_flag_renders_no_notice(): void
     {
         $_GET['concordance_flushed'] = 'not-a-flag';
@@ -660,8 +646,7 @@ class SettingsAdminTest extends TestCase
     }
 
     // ── the connection test ───────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function the_api_is_not_called_until_the_connection_test_is_requested(): void
     {
         $this->client->expects($this->never())->method('getGroups');
@@ -669,7 +654,7 @@ class SettingsAdminTest extends TestCase
         $this->render([$this->admin, 'renderSettingsPage']);
     }
 
-    /** @test */
+    #[Test]
     public function the_connection_test_is_ignored_without_a_valid_nonce(): void
     {
         $_GET['concordance_test'] = '1';
@@ -679,7 +664,7 @@ class SettingsAdminTest extends TestCase
         $this->render([$this->admin, 'renderSettingsPage']);
     }
 
-    /** @test */
+    #[Test]
     public function a_successful_connection_test_reports_the_group_count(): void
     {
         $this->requestConnectionTest();
@@ -694,9 +679,8 @@ class SettingsAdminTest extends TestCase
     /**
      * The first record is echoed to the browser console so the payload shape
      * can be inspected when choosing Visible Fields.
-     *
-     * @test
      */
+    #[Test]
     public function a_successful_connection_test_logs_the_first_raw_record(): void
     {
         $this->requestConnectionTest();
@@ -711,7 +695,7 @@ class SettingsAdminTest extends TestCase
         $this->assertStringContainsString('open DevTools', $html);
     }
 
-    /** @test */
+    #[Test]
     public function an_empty_successful_response_logs_nothing_to_the_console(): void
     {
         $this->requestConnectionTest();
@@ -723,7 +707,7 @@ class SettingsAdminTest extends TestCase
         $this->assertStringNotContainsString('console.log', $html);
     }
 
-    /** @test */
+    #[Test]
     public function a_failed_connection_test_shows_the_api_error_message(): void
     {
         $this->requestConnectionTest();
@@ -738,9 +722,8 @@ class SettingsAdminTest extends TestCase
     /**
      * A thrown exception must surface as a notice rather than a white screen
      * over the whole settings page.
-     *
-     * @test
      */
+    #[Test]
     public function a_thrown_exception_during_the_connection_test_is_caught(): void
     {
         $this->requestConnectionTest();
@@ -755,10 +738,10 @@ class SettingsAdminTest extends TestCase
     }
 
     /**
-     * @test
-     * @dataProvider apiEnvelopes
      * @param array<string, mixed>|null $expected
      */
+    #[DataProvider('apiEnvelopes')]
+    #[Test]
     public function the_first_raw_record_is_unwrapped_from_any_envelope(
         mixed $response,
         ?array $expected
@@ -786,12 +769,11 @@ class SettingsAdminTest extends TestCase
     }
 
     // ── cache flush (reflection: the live caller exits) ───────────────
-
     /**
-     * @test
-     * @dataProvider ignoredFlushRequests
      * @param array<string, string> $get
      */
+    #[DataProvider('ignoredFlushRequests')]
+    #[Test]
     public function a_flush_that_should_be_ignored_produces_no_redirect(array $get, bool $userCan): void
     {
         $_GET             = $get;
@@ -809,7 +791,7 @@ class SettingsAdminTest extends TestCase
         ];
     }
 
-    /** @test */
+    #[Test]
     public function a_flush_with_a_forged_nonce_is_rejected(): void
     {
         $_GET = ['concordance_flush_cache' => '1', '_wpnonce' => 'forged'];
@@ -818,7 +800,7 @@ class SettingsAdminTest extends TestCase
         $this->assertStringContainsString('concordance_flushed=invalid', (string) $this->resolveFlush());
     }
 
-    /** @test */
+    #[Test]
     public function a_flush_with_no_nonce_at_all_is_rejected(): void
     {
         $_GET = ['concordance_flush_cache' => '1'];
@@ -826,7 +808,7 @@ class SettingsAdminTest extends TestCase
         $this->assertStringContainsString('concordance_flushed=invalid', (string) $this->resolveFlush());
     }
 
-    /** @test */
+    #[Test]
     public function a_flush_without_a_cache_service_reports_it_as_unavailable(): void
     {
         $_GET  = $this->validFlushRequest();
@@ -838,7 +820,7 @@ class SettingsAdminTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function a_successful_flush_says_so(): void
     {
         $_GET = $this->validFlushRequest();
@@ -847,7 +829,7 @@ class SettingsAdminTest extends TestCase
         $this->assertStringContainsString('concordance_flushed=cleared', (string) $this->resolveFlush());
     }
 
-    /** @test */
+    #[Test]
     public function a_flush_that_could_not_write_the_version_reports_an_error(): void
     {
         $_GET = $this->validFlushRequest();
@@ -856,7 +838,7 @@ class SettingsAdminTest extends TestCase
         $this->assertStringContainsString('concordance_flushed=error', (string) $this->resolveFlush());
     }
 
-    /** @test */
+    #[Test]
     public function a_flush_that_throws_reports_an_error_rather_than_dying(): void
     {
         $_GET = $this->validFlushRequest();
@@ -865,7 +847,7 @@ class SettingsAdminTest extends TestCase
         $this->assertStringContainsString('concordance_flushed=error', (string) $this->resolveFlush());
     }
 
-    /** @test */
+    #[Test]
     public function the_flush_redirect_lands_back_on_the_settings_page(): void
     {
         $_GET = $this->validFlushRequest();
@@ -877,7 +859,7 @@ class SettingsAdminTest extends TestCase
         $this->assertStringContainsString('page=concordance', $target);
     }
 
-    /** @test */
+    #[Test]
     public function handle_cache_flush_leaves_an_unrelated_request_alone(): void
     {
         $this->admin->handleCacheFlush();
@@ -886,8 +868,7 @@ class SettingsAdminTest extends TestCase
     }
 
     // ── documentation link ────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function the_docs_page_opens_the_bundled_html_in_a_new_tab(): void
     {
         $expected = CONCORDANCE_PLUGIN_URL . 'assets/docs/concordance.html';
@@ -899,7 +880,7 @@ class SettingsAdminTest extends TestCase
         $this->assertStringContainsString('target="_blank"', $html);
     }
 
-    /** @test */
+    #[Test]
     public function the_admin_footer_script_retargets_the_docs_menu_link(): void
     {
         $html = $this->render([$this->admin, 'addDocsNewTabScript']);

@@ -6,7 +6,7 @@
  * Version: 1.9.18
  * Build date: 2026/05/31
  * Requires at least: 6.0
- * Requires PHP: 8.1
+ * Requires PHP: 8.4
  * GitHub Plugin URI: https://github.com/bleedingdeacons/concordance
  * GitHub Branch: main
  * Author: The Bleeding Deacons

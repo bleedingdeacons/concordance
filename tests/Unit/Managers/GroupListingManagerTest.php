@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Concordance\Tests\Unit\Managers;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\MockObject\MockObject;
 use Concordance\Api\ApiCache;
 use Concordance\Managers\GroupListingManager;
 use BleedingDeacons\WpMocks\TestCase;
@@ -12,12 +14,10 @@ use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
 
-/**
- * @covers \Concordance\Managers\GroupListingManager
- */
+#[CoversClass(\Concordance\Managers\GroupListingManager::class)]
 class GroupListingManagerTest extends TestCase
 {
-    /** @var ApiCache&\PHPUnit\Framework\MockObject\MockObject */
+    /** @var ApiCache&MockObject */
     private $cache;
     private GroupListingManager $manager;
 
