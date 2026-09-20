@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Concordance\Tests\Unit\Cli;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use Concordance\Common\Encryption;
+use PHPUnit\Framework\MockObject\MockObject;
 use Concordance\Api\ApiCache;
 use Concordance\Api\ApiClient;
 use Concordance\Cli\ConcordanceCli;
@@ -12,14 +15,12 @@ use BleedingDeacons\WpMocks\TestCase;
 use BleedingDeacons\WpMocks\WpState;
 use WP_Error;
 
-/**
- * @covers \Concordance\Cli\ConcordanceCli
- */
+#[CoversClass(\Concordance\Cli\ConcordanceCli::class)]
 class ConcordanceCliTest extends TestCase
 {
-    /** @var ApiClient&\PHPUnit\Framework\MockObject\MockObject */
+    /** @var ApiClient&MockObject */
     private $client;
-    /** @var ApiCache&\PHPUnit\Framework\MockObject\MockObject */
+    /** @var ApiCache&MockObject */
     private $cache;
     private ConcordanceCli $cli;
 
@@ -150,7 +151,7 @@ class ConcordanceCliTest extends TestCase
 
     public function testConfigFormatsSettings(): void
     {
-        WpState::$options['concordance_api_key'] = (new \Concordance\Common\Encryption())->encrypt('abcdefghijklmnop');
+        WpState::$options['concordance_api_key'] = (new Encryption())->encrypt('abcdefghijklmnop');
         $this->cli->config([], []);
         $this->assertNotNull($GLOBALS['conc_cli_formatted']);
         $settings = array_column($GLOBALS['conc_cli_formatted']['items'], 'Setting');

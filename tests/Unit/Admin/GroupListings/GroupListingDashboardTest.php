@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Concordance\Tests\Unit\Admin\GroupListings;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\MockObject\MockObject;
 use BleedingDeacons\WpMocks\Exceptions\JsonResponseException;
 use BleedingDeacons\WpMocks\Exceptions\WpDieException;
 use BleedingDeacons\WpMocks\TestCase;
@@ -33,12 +37,11 @@ use WP_Error;
  *     is directly assertable.
  *
  * No HTTP happens here — ApiCache is a double throughout.
- *
- * @covers \Concordance\Admin\GroupListings\GroupListingDashboard
  */
+#[CoversClass(\Concordance\Admin\GroupListings\GroupListingDashboard::class)]
 class GroupListingDashboardTest extends TestCase
 {
-    /** @var ApiCache&\PHPUnit\Framework\MockObject\MockObject */
+    /** @var ApiCache&MockObject */
     private $cache;
 
     private GroupListingDashboard $dashboard;
@@ -61,8 +64,7 @@ class GroupListingDashboardTest extends TestCase
     }
 
     // ── registration ──────────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function the_constructor_registers_every_hook_the_widget_needs(): void
     {
         foreach (
@@ -77,7 +79,7 @@ class GroupListingDashboardTest extends TestCase
         }
     }
 
-    /** @test */
+    #[Test]
     public function the_widget_registers_itself_on_the_dashboard(): void
     {
         $this->dashboard->registerDashboardWidget();
@@ -94,8 +96,7 @@ class GroupListingDashboardTest extends TestCase
     }
 
     // ── widget rendering ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function an_api_error_is_shown_in_place_of_the_widget(): void
     {
         $this->cache->method('getGroups')->willReturn(new WP_Error('http_error', 'Connection refused'));
@@ -107,7 +108,7 @@ class GroupListingDashboardTest extends TestCase
         $this->assertStringNotContainsString('gl-card', $html);
     }
 
-    /** @test */
+    #[Test]
     public function an_empty_api_response_says_so(): void
     {
         $this->cache->method('getGroups')->willReturn([]);
@@ -118,7 +119,7 @@ class GroupListingDashboardTest extends TestCase
         $this->assertStringNotContainsString('gl-cards', $html);
     }
 
-    /** @test */
+    #[Test]
     public function every_group_gets_a_card_when_no_filter_is_set(): void
     {
         $this->cache->method('getGroups')->willReturn($this->groupsResponse());
@@ -135,9 +136,8 @@ class GroupListingDashboardTest extends TestCase
     /**
      * Cards are ordered day, then time, then name — the order someone
      * scanning the week expects, not the order the API happened to return.
-     *
-     * @test
      */
+    #[Test]
     public function cards_are_sorted_by_day_then_time(): void
     {
         $this->cache->method('getGroups')->willReturn($this->groupsResponse());
@@ -148,7 +148,7 @@ class GroupListingDashboardTest extends TestCase
         $this->assertLessThan(strpos($html, 'Wednesday Big Book'), strpos($html, 'Tuesday Steps'));
     }
 
-    /** @test */
+    #[Test]
     public function the_saved_filter_narrows_the_cards_but_not_the_dropdown(): void
     {
         WpState::$options[ConcordanceConfiguration::OPTION_INTERGROUP_ID] = 7;
@@ -163,7 +163,7 @@ class GroupListingDashboardTest extends TestCase
         $this->assertStringContainsString('<option value="9">Cornwall</option>', $html);
     }
 
-    /** @test */
+    #[Test]
     public function a_filter_matching_nothing_explains_itself_rather_than_rendering_blank(): void
     {
         WpState::$options[ConcordanceConfiguration::OPTION_INTERGROUP_ID] = 999;
@@ -177,7 +177,7 @@ class GroupListingDashboardTest extends TestCase
         $this->assertStringContainsString('Intergroup #999 (currently saved)', $html);
     }
 
-    /** @test */
+    #[Test]
     public function the_selector_posts_to_admin_post_with_a_nonce_and_a_no_js_fallback(): void
     {
         $this->cache->method('getGroups')->willReturn($this->groupsResponse());
@@ -193,9 +193,8 @@ class GroupListingDashboardTest extends TestCase
     /**
      * The inline script's element lookups run against markup emitted before
      * it, so the script must come last or it silently binds nothing.
-     *
-     * @test
      */
+    #[Test]
     public function the_inline_script_is_emitted_after_the_cards_container(): void
     {
         $this->cache->method('getGroups')->willReturn($this->groupsResponse());
@@ -211,7 +210,7 @@ class GroupListingDashboardTest extends TestCase
         $this->assertStringContainsString('"https:\/\/example.test\/wp-admin\/admin-ajax.php"', $html);
     }
 
-    /** @test */
+    #[Test]
     public function an_intergroup_with_no_id_is_left_out_of_the_dropdown(): void
     {
         $this->cache->method('getGroups')->willReturn([
@@ -226,8 +225,7 @@ class GroupListingDashboardTest extends TestCase
     }
 
     // ── card contents ─────────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function only_the_enabled_fields_appear_on_a_card(): void
     {
         WpState::$options[ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS] = ['town'];
@@ -240,7 +238,7 @@ class GroupListingDashboardTest extends TestCase
         $this->assertStringNotContainsString('>Start Time</div>', $html);
     }
 
-    /** @test */
+    #[Test]
     public function fields_are_rendered_in_whitelist_order_not_submission_order(): void
     {
         WpState::$options[ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS] = ['postcode', 'day'];
@@ -253,7 +251,7 @@ class GroupListingDashboardTest extends TestCase
         $this->assertLessThan(strpos($html, '>Postcode</div>'), strpos($html, '>Day</div>'));
     }
 
-    /** @test */
+    #[Test]
     public function a_corrupted_fields_option_falls_back_to_the_defaults(): void
     {
         WpState::$options[ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS] = 'corrupted';
@@ -268,10 +266,9 @@ class GroupListingDashboardTest extends TestCase
     /**
      * An enabled-but-unusable field would otherwise render as an empty labelled
      * row on every card.
-     *
-     * @test
-     * @dataProvider skippedValues
      */
+    #[DataProvider('skippedValues')]
+    #[Test]
     public function unusable_field_values_are_skipped(mixed $value): void
     {
         WpState::$options[ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS] = ['notes'];
@@ -297,7 +294,7 @@ class GroupListingDashboardTest extends TestCase
         ];
     }
 
-    /** @test */
+    #[Test]
     public function a_field_absent_from_the_api_payload_is_skipped(): void
     {
         WpState::$options[ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS] = ['notes', 'town'];
@@ -311,7 +308,7 @@ class GroupListingDashboardTest extends TestCase
         $this->assertStringNotContainsString('>Notes</div>', $html);
     }
 
-    /** @test */
+    #[Test]
     public function a_true_flag_renders_as_yes(): void
     {
         WpState::$options[ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS] = ['wheelchair'];
@@ -325,7 +322,7 @@ class GroupListingDashboardTest extends TestCase
         $this->assertStringContainsString('>Yes</div>', $html);
     }
 
-    /** @test */
+    #[Test]
     public function a_url_field_becomes_a_new_tab_link(): void
     {
         WpState::$options[ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS] = ['notes'];
@@ -341,7 +338,7 @@ class GroupListingDashboardTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function an_email_field_becomes_a_mailto_link(): void
     {
         WpState::$options[ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS] = ['regionHelpline'];
@@ -355,7 +352,7 @@ class GroupListingDashboardTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function a_long_value_gets_the_full_width_class(): void
     {
         WpState::$options[ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS] = ['notes', 'town'];
@@ -373,10 +370,10 @@ class GroupListingDashboardTest extends TestCase
     }
 
     /**
-     * @test
-     * @dataProvider nameKeys
      * @param array<string, mixed> $raw
      */
+    #[DataProvider('nameKeys')]
+    #[Test]
     public function the_card_title_falls_back_through_the_api_name_keys(array $raw, string $expected): void
     {
         $this->cache->method('getGroups')->willReturn([['id' => 1] + $raw]);
@@ -400,11 +397,8 @@ class GroupListingDashboardTest extends TestCase
     }
 
     // ── admin styles ──────────────────────────────────────────────────
-
-    /**
-     * @test
-     * @dataProvider screens
-     */
+    #[DataProvider('screens')]
+    #[Test]
     public function the_widget_styles_load_on_the_dashboard_only(?string $screenId, bool $expected): void
     {
         WpState::$screen = $screenId === null ? null : (object) ['id' => $screenId];
@@ -429,8 +423,7 @@ class GroupListingDashboardTest extends TestCase
     }
 
     // ── the admin-post handler ────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function the_filter_form_refuses_a_user_without_either_capability(): void
     {
         WpState::$userCan = false;
@@ -439,7 +432,7 @@ class GroupListingDashboardTest extends TestCase
         $this->dashboard->handleSetIntergroup();
     }
 
-    /** @test */
+    #[Test]
     public function the_filter_form_refuses_a_forged_nonce(): void
     {
         $_POST = ['_concordance_nonce' => 'forged', 'intergroup_id' => '7'];
@@ -456,7 +449,7 @@ class GroupListingDashboardTest extends TestCase
         }
     }
 
-    /** @test */
+    #[Test]
     public function a_missing_nonce_is_treated_as_a_forged_one(): void
     {
         $_POST = ['intergroup_id' => '7'];
@@ -465,10 +458,8 @@ class GroupListingDashboardTest extends TestCase
         $this->dashboard->handleSetIntergroup();
     }
 
-    /**
-     * @test
-     * @dataProvider submittedFilters
-     */
+    #[DataProvider('submittedFilters')]
+    #[Test]
     public function the_submitted_filter_is_sanitised_and_saved(mixed $submitted, int $expected): void
     {
         $_POST = ['intergroup_id' => $submitted];
@@ -492,7 +483,7 @@ class GroupListingDashboardTest extends TestCase
         ];
     }
 
-    /** @test */
+    #[Test]
     public function an_absent_filter_value_saves_the_all_sentinel(): void
     {
         $this->applySetIntergroup();
@@ -503,7 +494,7 @@ class GroupListingDashboardTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function the_handler_returns_to_the_posted_referer(): void
     {
         $_POST = ['_wp_http_referer' => 'https://example.test/wp-admin/index.php?page=2'];
@@ -514,7 +505,7 @@ class GroupListingDashboardTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function the_handler_falls_back_to_the_dashboard_without_a_referer(): void
     {
         $this->assertSame(
@@ -524,8 +515,7 @@ class GroupListingDashboardTest extends TestCase
     }
 
     // ── the AJAX endpoint ─────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function the_ajax_endpoint_refuses_a_user_without_either_capability(): void
     {
         WpState::$userCan = false;
@@ -536,7 +526,7 @@ class GroupListingDashboardTest extends TestCase
         $this->assertSame(403, $error->status);
     }
 
-    /** @test */
+    #[Test]
     public function the_ajax_endpoint_refuses_a_forged_nonce(): void
     {
         $_POST = ['_concordance_nonce' => 'forged'];
@@ -552,7 +542,7 @@ class GroupListingDashboardTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function the_ajax_endpoint_refuses_a_request_with_no_nonce_at_all(): void
     {
         $error = $this->catchJson(fn () => $this->dashboard->ajaxFilterIntergroup());
@@ -561,7 +551,7 @@ class GroupListingDashboardTest extends TestCase
         $this->assertSame(403, $error->status);
     }
 
-    /** @test */
+    #[Test]
     public function the_ajax_endpoint_reports_an_api_error_as_a_server_error(): void
     {
         $this->postFilter(7);
@@ -574,7 +564,7 @@ class GroupListingDashboardTest extends TestCase
         $this->assertSame(['message' => 'Connection refused'], $error->data);
     }
 
-    /** @test */
+    #[Test]
     public function the_ajax_endpoint_saves_the_filter_and_returns_the_matching_cards(): void
     {
         $this->postFilter(7);
@@ -589,7 +579,7 @@ class GroupListingDashboardTest extends TestCase
         $this->assertStringNotContainsString('Monday Nooners', $success->data['html']);
     }
 
-    /** @test */
+    #[Test]
     public function the_ajax_endpoint_returns_every_card_for_the_all_sentinel(): void
     {
         $this->postFilter(ConcordanceConfiguration::INTERGROUP_ID_ALL);
@@ -603,9 +593,8 @@ class GroupListingDashboardTest extends TestCase
     /**
      * The swapped-in region is the cards only — re-rendering the selector too
      * would nest a second form inside the first.
-     *
-     * @test
      */
+    #[Test]
     public function the_ajax_payload_carries_the_cards_without_the_selector(): void
     {
         $this->postFilter(ConcordanceConfiguration::INTERGROUP_ID_ALL);
@@ -617,7 +606,7 @@ class GroupListingDashboardTest extends TestCase
         $this->assertStringNotContainsString('<select', $html);
     }
 
-    /** @test */
+    #[Test]
     public function an_ajax_filter_matching_nothing_returns_the_empty_message(): void
     {
         $this->postFilter(999);

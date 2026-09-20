@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Concordance\Tests\Unit\Models;
 
+use PHPUnit\Framework\Attributes\CoversClass;
 use Concordance\Models\GroupListing;
 use PHPUnit\Framework\TestCase;
 
@@ -11,9 +12,8 @@ use PHPUnit\Framework\TestCase;
  * Covers GroupListing display helpers not exercised by the main model suite:
  * the formatted last-update date, the title-case normaliser, and the
  * intergroup display name.
- *
- * @covers \Concordance\Models\GroupListing
  */
+#[CoversClass(\Concordance\Models\GroupListing::class)]
 class GroupListingExtraTest extends TestCase
 {
     public function testFormattedLastUpdateEmpty(): void

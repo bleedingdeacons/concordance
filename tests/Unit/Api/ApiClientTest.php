@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Concordance\Tests\Unit\Api;
 
+use PHPUnit\Framework\Attributes\CoversClass;
 use BleedingDeacons\WpMocks\Doubles\FakeWpHttp;
 use BleedingDeacons\WpMocks\TestCase;
 use BleedingDeacons\WpMocks\WpState;
@@ -12,9 +13,7 @@ use Concordance\Common\ConcordanceConfiguration;
 use Concordance\Common\Encryption;
 use WP_Error;
 
-/**
- * @covers \Concordance\Api\ApiClient
- */
+#[CoversClass(\Concordance\Api\ApiClient::class)]
 class ApiClientTest extends TestCase
 {
     protected function setUp(): void

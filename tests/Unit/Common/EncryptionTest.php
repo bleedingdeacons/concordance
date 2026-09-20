@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Concordance\Tests\Unit\Common;
 
+use PHPUnit\Framework\Attributes\Test;
 use Concordance\Common\Encryption;
 use PHPUnit\Framework\TestCase;
 
@@ -23,8 +24,7 @@ class EncryptionTest extends TestCase
     }
 
     // ── Round-trip ──────────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function encrypt_then_decrypt_returns_original_plaintext(): void
     {
         $enc = $this->createEncryption();
@@ -36,7 +36,7 @@ class EncryptionTest extends TestCase
         $this->assertSame($plaintext, $decrypted);
     }
 
-    /** @test */
+    #[Test]
     public function round_trip_works_for_unicode_content(): void
     {
         $enc = $this->createEncryption();
@@ -47,7 +47,7 @@ class EncryptionTest extends TestCase
         $this->assertSame($plaintext, $decrypted);
     }
 
-    /** @test */
+    #[Test]
     public function round_trip_works_for_long_values(): void
     {
         $enc = $this->createEncryption();
@@ -59,8 +59,7 @@ class EncryptionTest extends TestCase
     }
 
     // ── Empty string ────────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function encrypt_returns_empty_string_for_empty_input(): void
     {
         $enc = $this->createEncryption();
@@ -68,7 +67,7 @@ class EncryptionTest extends TestCase
         $this->assertSame('', $enc->encrypt(''));
     }
 
-    /** @test */
+    #[Test]
     public function decrypt_returns_empty_string_for_empty_input(): void
     {
         $enc = $this->createEncryption();
@@ -77,8 +76,7 @@ class EncryptionTest extends TestCase
     }
 
     // ── Encrypted prefix ────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function encrypted_value_starts_with_concordance_prefix(): void
     {
         $enc = $this->createEncryption();
@@ -88,7 +86,7 @@ class EncryptionTest extends TestCase
         $this->assertStringStartsWith('$concordance$', $encrypted);
     }
 
-    /** @test */
+    #[Test]
     public function encrypted_value_is_not_the_same_as_plaintext(): void
     {
         $enc = $this->createEncryption();
@@ -101,8 +99,7 @@ class EncryptionTest extends TestCase
     }
 
     // ── isEncrypted ─────────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function isEncrypted_returns_true_for_encrypted_values(): void
     {
         $enc = $this->createEncryption();
@@ -112,7 +109,7 @@ class EncryptionTest extends TestCase
         $this->assertTrue($enc->isEncrypted($encrypted));
     }
 
-    /** @test */
+    #[Test]
     public function isEncrypted_returns_false_for_plain_values(): void
     {
         $enc = $this->createEncryption();
@@ -122,8 +119,7 @@ class EncryptionTest extends TestCase
     }
 
     // ── Uniqueness (IV randomness) ──────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function encrypting_same_plaintext_twice_produces_different_ciphertext(): void
     {
         $enc = $this->createEncryption();
@@ -136,8 +132,7 @@ class EncryptionTest extends TestCase
     }
 
     // ── Tampered / malformed data ───────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function decrypt_returns_empty_for_value_without_prefix(): void
     {
         $enc = $this->createEncryption();
@@ -145,7 +140,7 @@ class EncryptionTest extends TestCase
         $this->assertSame('', $enc->decrypt('not-encrypted-at-all'));
     }
 
-    /** @test */
+    #[Test]
     public function decrypt_returns_empty_for_tampered_ciphertext(): void
     {
         $enc = $this->createEncryption();
@@ -165,7 +160,7 @@ class EncryptionTest extends TestCase
         $this->assertSame('', $enc->decrypt($tampered));
     }
 
-    /** @test */
+    #[Test]
     public function decrypt_returns_empty_for_truncated_ciphertext(): void
     {
         $enc = $this->createEncryption();
@@ -174,7 +169,7 @@ class EncryptionTest extends TestCase
         $this->assertSame('', $enc->decrypt('$concordance$' . base64_encode('short')));
     }
 
-    /** @test */
+    #[Test]
     public function decrypt_returns_empty_for_invalid_base64(): void
     {
         $enc = $this->createEncryption();
@@ -183,8 +178,7 @@ class EncryptionTest extends TestCase
     }
 
     // ── Different keys ──────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function decrypt_with_different_key_returns_empty(): void
     {
         $enc1 = new Encryption('key-one');

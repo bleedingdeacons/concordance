@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Concordance\Tests\Unit\Models;
 
+use PHPUnit\Framework\Attributes\Test;
 use Concordance\Models\GroupListing;
 use PHPUnit\Framework\TestCase;
 
@@ -35,8 +36,7 @@ class GroupListingTest extends TestCase
     }
 
     // ── fromArray factory ───────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function fromArray_creates_listing_with_correct_values(): void
     {
         $listing = GroupListing::fromArray($this->sampleData());
@@ -52,7 +52,7 @@ class GroupListingTest extends TestCase
         $this->assertSame('2024-06-15T00:00:00', $listing->getLastUpdate());
     }
 
-    /** @test */
+    #[Test]
     public function fromArray_defaults_missing_fields(): void
     {
         $listing = GroupListing::fromArray([]);
@@ -68,7 +68,7 @@ class GroupListingTest extends TestCase
         $this->assertSame('', $listing->getLastUpdate());
     }
 
-    /** @test */
+    #[Test]
     public function fromArray_preserves_raw_data(): void
     {
         $data = $this->sampleData(['extraField' => 'bonus']);
@@ -80,7 +80,7 @@ class GroupListingTest extends TestCase
         $this->assertSame('fallback', $listing->getRawValue('nonexistent', 'fallback'));
     }
 
-    /** @test */
+    #[Test]
     public function fromArray_casts_id_and_intergroupId_to_int(): void
     {
         $listing = GroupListing::fromArray($this->sampleData([
@@ -93,8 +93,7 @@ class GroupListingTest extends TestCase
     }
 
     // ── collectionFromResponse ──────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function collectionFromResponse_handles_flat_array(): void
     {
         $response = [
@@ -109,7 +108,7 @@ class GroupListingTest extends TestCase
         $this->assertSame(2, $collection[1]->getId());
     }
 
-    /** @test */
+    #[Test]
     public function collectionFromResponse_handles_results_wrapper(): void
     {
         $response = [
@@ -124,7 +123,7 @@ class GroupListingTest extends TestCase
         $this->assertSame(10, $collection[0]->getId());
     }
 
-    /** @test */
+    #[Test]
     public function collectionFromResponse_handles_data_wrapper(): void
     {
         $response = [
@@ -139,7 +138,7 @@ class GroupListingTest extends TestCase
         $this->assertCount(2, $collection);
     }
 
-    /** @test */
+    #[Test]
     public function collectionFromResponse_wraps_single_object(): void
     {
         $response = $this->sampleData(['id' => 55]);
@@ -150,7 +149,7 @@ class GroupListingTest extends TestCase
         $this->assertSame(55, $collection[0]->getId());
     }
 
-    /** @test */
+    #[Test]
     public function collectionFromResponse_handles_empty_array(): void
     {
         $collection = GroupListing::collectionFromResponse([]);
@@ -159,8 +158,7 @@ class GroupListingTest extends TestCase
     }
 
     // ── Display helpers ─────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function getTimeRange_returns_start_and_end(): void
     {
         $listing = GroupListing::fromArray($this->sampleData());
@@ -168,7 +166,7 @@ class GroupListingTest extends TestCase
         $this->assertSame('19:30 – 20:30', $listing->getTimeRange());
     }
 
-    /** @test */
+    #[Test]
     public function getTimeRange_returns_start_only_when_no_end(): void
     {
         $listing = GroupListing::fromArray($this->sampleData(['endTime' => '']));
@@ -176,7 +174,7 @@ class GroupListingTest extends TestCase
         $this->assertSame('19:30', $listing->getTimeRange());
     }
 
-    /** @test */
+    #[Test]
     public function getTimeRange_returns_empty_when_no_start(): void
     {
         $listing = GroupListing::fromArray($this->sampleData(['startTime' => '']));
@@ -184,7 +182,7 @@ class GroupListingTest extends TestCase
         $this->assertSame('', $listing->getTimeRange());
     }
 
-    /** @test */
+    #[Test]
     public function hasTown_returns_true_when_town_set(): void
     {
         $listing = GroupListing::fromArray($this->sampleData());
@@ -192,7 +190,7 @@ class GroupListingTest extends TestCase
         $this->assertTrue($listing->hasTown());
     }
 
-    /** @test */
+    #[Test]
     public function hasTown_returns_false_when_town_empty(): void
     {
         $listing = GroupListing::fromArray($this->sampleData(['town' => '']));
@@ -200,7 +198,7 @@ class GroupListingTest extends TestCase
         $this->assertFalse($listing->hasTown());
     }
 
-    /** @test */
+    #[Test]
     public function isValid_returns_true_when_name_set(): void
     {
         $listing = GroupListing::fromArray($this->sampleData());
@@ -208,7 +206,7 @@ class GroupListingTest extends TestCase
         $this->assertTrue($listing->isValid());
     }
 
-    /** @test */
+    #[Test]
     public function isValid_returns_false_when_name_empty(): void
     {
         $listing = GroupListing::fromArray($this->sampleData(['groupName' => '']));
@@ -217,8 +215,7 @@ class GroupListingTest extends TestCase
     }
 
     // ── Serialisation ───────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function toArray_returns_api_shaped_array(): void
     {
         $data = $this->sampleData();
@@ -233,7 +230,7 @@ class GroupListingTest extends TestCase
         $this->assertArrayNotHasKey('raw', $array);
     }
 
-    /** @test */
+    #[Test]
     public function jsonSerialize_matches_toArray(): void
     {
         $listing = GroupListing::fromArray($this->sampleData());
@@ -241,7 +238,7 @@ class GroupListingTest extends TestCase
         $this->assertSame($listing->toArray(), $listing->jsonSerialize());
     }
 
-    /** @test */
+    #[Test]
     public function toString_returns_group_name(): void
     {
         $listing = GroupListing::fromArray($this->sampleData());
@@ -250,8 +247,7 @@ class GroupListingTest extends TestCase
     }
 
     // ── Sorting ─────────────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function sort_by_day_orders_monday_through_sunday(): void
     {
         $groups = [
@@ -267,7 +263,7 @@ class GroupListingTest extends TestCase
         $this->assertSame('F', $groups[2]->getGroupName());
     }
 
-    /** @test */
+    #[Test]
     public function sort_by_time_orders_chronologically(): void
     {
         $groups = [
@@ -283,7 +279,7 @@ class GroupListingTest extends TestCase
         $this->assertSame('Late', $groups[2]->getGroupName());
     }
 
-    /** @test */
+    #[Test]
     public function sort_by_name_orders_alphabetically(): void
     {
         $groups = [
@@ -299,7 +295,7 @@ class GroupListingTest extends TestCase
         $this->assertSame('Zebra', $groups[2]->getGroupName());
     }
 
-    /** @test */
+    #[Test]
     public function sort_by_day_then_time(): void
     {
         $groups = [
@@ -315,7 +311,7 @@ class GroupListingTest extends TestCase
         $this->assertSame('Tue-Late', $groups[2]->getGroupName());
     }
 
-    /** @test */
+    #[Test]
     public function sort_handles_unknown_day_gracefully(): void
     {
         $groups = [
@@ -329,7 +325,7 @@ class GroupListingTest extends TestCase
         $this->assertSame('Unknown', $groups[1]->getGroupName());
     }
 
-    /** @test */
+    #[Test]
     public function sort_with_unknown_field_preserves_order(): void
     {
         $groups = [

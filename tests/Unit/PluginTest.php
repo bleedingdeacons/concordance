@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Concordance\Tests\Unit;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use Concordance\Plugin;
 use Concordance\Managers\GroupListingManager;
 use BleedingDeacons\WpMocks\TestCase;
@@ -12,9 +15,7 @@ use Psr\Container\ContainerInterface;
 use ReflectionClass;
 use RuntimeException;
 
-/**
- * @covers \Concordance\Plugin
- */
+#[CoversClass(\Concordance\Plugin::class)]
 class PluginTest extends TestCase
 {
     protected function setUp(): void
@@ -62,10 +63,8 @@ class PluginTest extends TestCase
         Plugin::getContainer();
     }
 
-    /**
-     * @runInSeparateProcess
-     * @preserveGlobalState disabled
-     */
+    #[PreserveGlobalState(false)]
+    #[RunInSeparateProcess]
     public function testInitRegistersCliCommandsWhenWpCliDefined(): void
     {
         define('WP_CLI', true);

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Concordance\Tests\Unit\Api;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\MockObject\MockObject;
 use BleedingDeacons\WpMocks\Doubles\FakeWpdb;
 use BleedingDeacons\WpMocks\TestCase;
 use BleedingDeacons\WpMocks\WpState;
@@ -11,12 +13,10 @@ use Concordance\Api\ApiCache;
 use Concordance\Api\ApiClient;
 use WP_Error;
 
-/**
- * @covers \Concordance\Api\ApiCache
- */
+#[CoversClass(\Concordance\Api\ApiCache::class)]
 class ApiCacheTest extends TestCase
 {
-    /** @var ApiClient&\PHPUnit\Framework\MockObject\MockObject */
+    /** @var ApiClient&MockObject */
     private $client;
     private ApiCache $cache;
 
