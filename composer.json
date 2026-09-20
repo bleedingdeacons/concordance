@@ -16,6 +16,9 @@
     ],
     "require": {
         "php": ">=8.4",
+        "ext-mbstring": "*",
+        "ext-json": "*",
+        "ext-openssl": "*",
         "psr/container": "^2.0"
     },
     "require-dev": {
