@@ -4,55 +4,49 @@ declare(strict_types=1);
 
 namespace Concordance\Tests\Unit\Managers;
 
-use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\MockObject\MockObject;
+use BleedingDeacons\WpMocks\WpState;
 use Concordance\Api\ApiCache;
 use Concordance\Managers\GroupListingManager;
-use BleedingDeacons\WpMocks\TestCase;
-use BleedingDeacons\WpMocks\WpState;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
 
-#[CoversClass(\Concordance\Managers\GroupListingManager::class)]
-class GroupListingManagerTest extends TestCase
-{
-    /** @var ApiCache&MockObject */
-    private $cache;
-    private GroupListingManager $manager;
+/*
+ * Tests for GroupListingManager's REST routes and their callbacks.
+ */
 
-    protected function setUp(): void
-    {
-        parent::setUp();
-        // parent::setUp() clears WpState, including $restRoutes.
-        $this->cache = $this->createMock(ApiCache::class);
-        $this->manager = new GroupListingManager($this->cache);
-    }
+covers(\Concordance\Managers\GroupListingManager::class);
 
-    public function testRegisterRestRoutesRegistersBothRoutes(): void
-    {
+beforeEach(function () {
+    // The TestCase's setUp() clears WpState, including $restRoutes.
+    $this->cache = $this->createMock(ApiCache::class);
+    $this->manager = new GroupListingManager($this->cache);
+});
+
+describe('route registration', function () {
+    it('registers both routes', function () {
         $this->manager->registerRestRoutes();
 
         $routes = array_column(WpState::$restRoutes, 'route');
-        $this->assertContains('/groups', $routes);
-        $this->assertContains('/groups/(?P<id>[\w-]+)', $routes);
-    }
+        expect($routes)->toContain('/groups')
+            ->toContain('/groups/(?P<id>[\w-]+)');
+    });
 
-    public function testRegisteredValidateCallbacksBehave(): void
-    {
+    it('registers validate callbacks that behave', function () {
         $this->manager->registerRestRoutes();
         $routes = array_column(WpState::$restRoutes, null, 'route');
         $args = $routes['/groups']['args']['args'];
 
-        $this->assertTrue($args['page']['validate_callback'](3));
-        $this->assertFalse($args['page']['validate_callback'](0));
-        $this->assertTrue($args['per_page']['validate_callback'](50));
-        $this->assertFalse($args['per_page']['validate_callback'](200));
-        $this->assertTrue($args['intergroup']['validate_callback'](0));
-    }
+        expect($args['page']['validate_callback'](3))->toBeTrue()
+            ->and($args['page']['validate_callback'](0))->toBeFalse()
+            ->and($args['per_page']['validate_callback'](50))->toBeTrue()
+            ->and($args['per_page']['validate_callback'](200))->toBeFalse()
+            ->and($args['intergroup']['validate_callback'](0))->toBeTrue();
+    });
+});
 
-    public function testRestGetGroupsReturnsMappedCollection(): void
-    {
+describe('restGetGroups', function () {
+    it('returns the mapped collection', function () {
         $this->cache->method('getGroups')->willReturn([
             ['id' => 1, 'groupName' => 'Alpha'],
             ['id' => 2, 'groupName' => 'Beta'],
@@ -61,55 +55,51 @@ class GroupListingManagerTest extends TestCase
         $request = new WP_REST_Request(['page' => 1, 'not_allowed' => 'x']);
         $response = $this->manager->restGetGroups($request);
 
-        $this->assertInstanceOf(WP_REST_Response::class, $response);
-        $this->assertSame(200, $response->get_status());
-        $this->assertCount(2, $response->get_data());
-    }
+        expect($response)->toBeInstanceOf(WP_REST_Response::class)
+            ->and($response->get_status())->toBe(200)
+            ->and($response->get_data())->toHaveCount(2);
+    });
 
-    public function testRestGetGroupsForwardsWpErrorStatus(): void
-    {
+    it('forwards the status of a WP_Error', function () {
         $this->cache->method('getGroups')->willReturn(
             new WP_Error('api', 'upstream', ['status' => 404])
         );
 
         $response = $this->manager->restGetGroups(new WP_REST_Request([]));
-        $this->assertSame(404, $response->get_status());
-        $this->assertSame('upstream', $response->get_data()['error']);
-    }
+        expect($response->get_status())->toBe(404)
+            ->and($response->get_data()['error'])->toBe('upstream');
+    });
 
-    public function testRestGetGroupsDefaultsErrorStatusTo502(): void
-    {
+    it('defaults the error status to 502', function () {
         $this->cache->method('getGroups')->willReturn(new WP_Error('api', 'boom'));
         $response = $this->manager->restGetGroups(new WP_REST_Request([]));
-        $this->assertSame(502, $response->get_status());
-    }
+        expect($response->get_status())->toBe(502);
+    });
 
-    public function testRestGetGroupsHandlesException(): void
-    {
+    it('handles an exception', function () {
         $this->cache->method('getGroups')->willThrowException(new \RuntimeException('kaboom'));
         $response = $this->manager->restGetGroups(new WP_REST_Request([]));
-        $this->assertSame(500, $response->get_status());
-    }
+        expect($response->get_status())->toBe(500);
+    });
+});
 
-    public function testRestGetSingleGroupReturnsGroup(): void
-    {
+describe('restGetSingleGroup', function () {
+    it('returns the group', function () {
         $this->cache->method('getGroup')->with('42')->willReturn(['id' => 42, 'groupName' => 'Gamma']);
         $response = $this->manager->restGetSingleGroup(new WP_REST_Request(['id' => '42']));
-        $this->assertSame(200, $response->get_status());
-        $this->assertIsArray($response->get_data());
-    }
+        expect($response->get_status())->toBe(200)
+            ->and($response->get_data())->toBeArray();
+    });
 
-    public function testRestGetSingleGroupForwardsWpError(): void
-    {
+    it('forwards a WP_Error', function () {
         $this->cache->method('getGroup')->willReturn(new WP_Error('api', 'nope', ['status' => 404]));
         $response = $this->manager->restGetSingleGroup(new WP_REST_Request(['id' => '9']));
-        $this->assertSame(404, $response->get_status());
-    }
+        expect($response->get_status())->toBe(404);
+    });
 
-    public function testRestGetSingleGroupHandlesException(): void
-    {
+    it('handles an exception', function () {
         $this->cache->method('getGroup')->willThrowException(new \RuntimeException('x'));
         $response = $this->manager->restGetSingleGroup(new WP_REST_Request(['id' => '9']));
-        $this->assertSame(500, $response->get_status());
-    }
-}
+        expect($response->get_status())->toBe(500);
+    });
+});

@@ -4,167 +4,131 @@ declare(strict_types=1);
 
 namespace Concordance\Tests\Unit\Core;
 
-use PHPUnit\Framework\Attributes\Test;
-use Psr\Container\NotFoundExceptionInterface;
-use Psr\Container\ContainerExceptionInterface;
 use Concordance\Core\Container;
 use Concordance\Core\ContainerException;
 use Concordance\Core\NotFoundException;
-use PHPUnit\Framework\TestCase;
+use Psr\Container\ContainerExceptionInterface;
+use Psr\Container\NotFoundExceptionInterface;
 
-/**
+/*
  * Tests for the PSR-11 Container.
  *
  * No WordPress dependencies — pure PHP.
  */
-class ContainerTest extends TestCase
-{
-    // ── Registration & resolution ───────────────────────────────────
-    #[Test]
-    public function get_resolves_a_registered_service(): void
-    {
-        $container = new Container();
-        $container->register('greeting', fn() => 'hello');
 
-        $this->assertSame('hello', $container->get('greeting'));
-    }
+// ── Registration & resolution ───────────────────────────────────
+it('resolves a registered service', function () {
+    $container = new Container();
+    $container->register('greeting', fn() => 'hello');
 
-    #[Test]
-    public function get_resolves_singleton_returning_same_instance(): void
-    {
-        $container = new Container();
-        $container->register('obj', fn() => new \stdClass());
+    expect($container->get('greeting'))->toBe('hello');
+});
 
-        $first = $container->get('obj');
-        $second = $container->get('obj');
+it('resolves a singleton to the same instance every time', function () {
+    $container = new Container();
+    $container->register('obj', fn() => new \stdClass());
 
-        $this->assertSame($first, $second);
-    }
+    $first = $container->get('obj');
+    $second = $container->get('obj');
 
-    #[Test]
-    public function factory_receives_container_as_argument(): void
-    {
-        $container = new Container();
-        $container->register('dep', fn() => 'dependency-value');
-        $container->register('service', fn(Container $c) => 'got:' . $c->get('dep'));
+    expect($first)->toBe($second);
+});
 
-        $this->assertSame('got:dependency-value', $container->get('service'));
-    }
+it('passes the container to the factory', function () {
+    $container = new Container();
+    $container->register('dep', fn() => 'dependency-value');
+    $container->register('service', fn(Container $c) => 'got:' . $c->get('dep'));
 
-    #[Test]
-    public function factory_is_called_lazily_not_at_registration(): void
-    {
-        $called = false;
-        $container = new Container();
-        $container->register('lazy', function () use (&$called) {
-            $called = true;
-            return 'value';
-        });
+    expect($container->get('service'))->toBe('got:dependency-value');
+});
 
-        $this->assertFalse($called, 'Factory should not be called at registration time');
+it('calls the factory lazily, not at registration', function () {
+    $called = false;
+    $container = new Container();
+    $container->register('lazy', function () use (&$called) {
+        $called = true;
+        return 'value';
+    });
 
-        $container->get('lazy');
-        $this->assertTrue($called);
-    }
+    expect($called)->toBeFalse('Factory should not be called at registration time');
 
-    // ── has() ───────────────────────────────────────────────────────
-    #[Test]
-    public function has_returns_true_for_registered_service(): void
-    {
-        $container = new Container();
-        $container->register('exists', fn() => true);
+    $container->get('lazy');
+    expect($called)->toBeTrue();
+});
 
-        $this->assertTrue($container->has('exists'));
-    }
+// ── has() ───────────────────────────────────────────────────────
+it('has a registered service', function () {
+    $container = new Container();
+    $container->register('exists', fn() => true);
 
-    #[Test]
-    public function has_returns_false_for_unregistered_service(): void
-    {
-        $container = new Container();
+    expect($container->has('exists'))->toBeTrue();
+});
 
-        $this->assertFalse($container->has('nope'));
-    }
+it('does not have an unregistered service', function () {
+    $container = new Container();
 
-    #[Test]
-    public function has_returns_true_after_resolution(): void
-    {
-        $container = new Container();
-        $container->register('svc', fn() => 'val');
-        $container->get('svc');
+    expect($container->has('nope'))->toBeFalse();
+});
 
-        $this->assertTrue($container->has('svc'));
-    }
+it('still has a service after resolving it', function () {
+    $container = new Container();
+    $container->register('svc', fn() => 'val');
+    $container->get('svc');
 
-    // ── Re-registration ─────────────────────────────────────────────
-    #[Test]
-    public function re_registering_clears_cached_instance(): void
-    {
-        $container = new Container();
-        $container->register('svc', fn() => 'first');
+    expect($container->has('svc'))->toBeTrue();
+});
 
-        $this->assertSame('first', $container->get('svc'));
+// ── Re-registration ─────────────────────────────────────────────
+it('clears the cached instance when a service is re-registered', function () {
+    $container = new Container();
+    $container->register('svc', fn() => 'first');
 
-        $container->register('svc', fn() => 'second');
+    expect($container->get('svc'))->toBe('first');
 
-        $this->assertSame('second', $container->get('svc'));
-    }
+    $container->register('svc', fn() => 'second');
 
-    // ── Exceptions ──────────────────────────────────────────────────
-    #[Test]
-    public function get_throws_NotFoundException_for_unknown_service(): void
-    {
-        $container = new Container();
+    expect($container->get('svc'))->toBe('second');
+});
 
-        $this->expectException(NotFoundException::class);
-        $this->expectExceptionMessageMatches('/not registered/');
+// ── Exceptions ──────────────────────────────────────────────────
+it('throws NotFoundException for an unknown service', function () {
+    $container = new Container();
 
-        $container->get('unknown');
-    }
+    $container->get('unknown');
+})->throws(NotFoundException::class, 'not registered');
 
-    #[Test]
-    public function NotFoundException_implements_psr_interface(): void
-    {
-        $e = new NotFoundException('test');
+it('makes NotFoundException implement the PSR interface', function () {
+    $e = new NotFoundException('test');
 
-        $this->assertInstanceOf(NotFoundExceptionInterface::class, $e);
-    }
+    expect($e)->toBeInstanceOf(NotFoundExceptionInterface::class);
+});
 
-    #[Test]
-    public function get_throws_ContainerException_when_factory_throws(): void
-    {
-        $container = new Container();
-        $container->register('broken', function () {
-            throw new \RuntimeException('factory failed');
-        });
+it('throws ContainerException when the factory throws', function () {
+    $container = new Container();
+    $container->register('broken', function () {
+        throw new \RuntimeException('factory failed');
+    });
 
-        $this->expectException(ContainerException::class);
-        $this->expectExceptionMessageMatches('/factory failed/');
+    $container->get('broken');
+})->throws(ContainerException::class, 'factory failed');
 
+it('makes ContainerException implement the PSR interface', function () {
+    $e = new ContainerException('test');
+
+    expect($e)->toBeInstanceOf(ContainerExceptionInterface::class);
+});
+
+it('wraps the original exception in ContainerException', function () {
+    $container = new Container();
+    $original = new \RuntimeException('root cause');
+    $container->register('broken', function () use ($original) {
+        throw $original;
+    });
+
+    try {
         $container->get('broken');
+        $this->fail('Expected ContainerException');
+    } catch (ContainerException $e) {
+        expect($e->getPrevious())->toBe($original);
     }
-
-    #[Test]
-    public function ContainerException_implements_psr_interface(): void
-    {
-        $e = new ContainerException('test');
-
-        $this->assertInstanceOf(ContainerExceptionInterface::class, $e);
-    }
-
-    #[Test]
-    public function ContainerException_wraps_original_exception(): void
-    {
-        $container = new Container();
-        $original = new \RuntimeException('root cause');
-        $container->register('broken', function () use ($original) {
-            throw $original;
-        });
-
-        try {
-            $container->get('broken');
-            $this->fail('Expected ContainerException');
-        } catch (ContainerException $e) {
-            $this->assertSame($original, $e->getPrevious());
-        }
-    }
-}
+});

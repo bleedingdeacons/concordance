@@ -4,13 +4,8 @@ declare(strict_types=1);
 
 namespace Concordance\Tests\Unit\Admin\GroupListings;
 
-use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\Test;
-use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\MockObject\MockObject;
 use BleedingDeacons\WpMocks\Exceptions\JsonResponseException;
 use BleedingDeacons\WpMocks\Exceptions\WpDieException;
-use BleedingDeacons\WpMocks\TestCase;
 use BleedingDeacons\WpMocks\WpState;
 use Concordance\Admin\GroupListings\GroupListingDashboard;
 use Concordance\Api\ApiCache;
@@ -18,10 +13,10 @@ use Concordance\Common\ConcordanceConfiguration;
 use ReflectionMethod;
 use WP_Error;
 
-/**
+/*
  * Tests for the "National Group Listings" dashboard widget.
  *
- * Companion to SettingsAdminTest — see that class for why src/Admin stopped
+ * Companion to SettingsAdminTest — see that file for why src/Admin stopped
  * being excluded from coverage. The techniques divide the same way:
  *
  *   - registerDashboardWidget() runs for real against WpState::$widgets.
@@ -29,7 +24,7 @@ use WP_Error;
  *     output buffer, which is what proves the ApiCache wiring: an errored
  *     response, an empty one, and a filtered one each produce different HTML.
  *   - handleSetIntergroup()'s two guards call wp_die(), which the stubs turn
- *     into a WpDieException, so each is a plain expectException. Its tail
+ *     into a WpDieException, so each is a plain ->throws(). Its tail
  *     redirects and then exits, so the option write and referer resolution
  *     were split into applySetIntergroup() and are reached by reflection.
  *   - ajaxFilterIntergroup() needs none of that: wp_send_json_success/error
@@ -38,35 +33,82 @@ use WP_Error;
  *
  * No HTTP happens here — ApiCache is a double throughout.
  */
-#[CoversClass(\Concordance\Admin\GroupListings\GroupListingDashboard::class)]
-class GroupListingDashboardTest extends TestCase
+
+covers(\Concordance\Admin\GroupListings\GroupListingDashboard::class);
+
+/** Mark the current request as a nonce-verified filter submission. */
+function postDashboardFilter(int $intergroupId): void
 {
-    /** @var ApiCache&MockObject */
-    private $cache;
+    $_POST = [
+        '_concordance_nonce' => 'nonce-concordance_set_intergroup',
+        'intergroup_id'      => (string) $intergroupId,
+    ];
+}
 
-    private GroupListingDashboard $dashboard;
+/**
+ * Invoke the branch of handleSetIntergroup() that would otherwise be
+ * followed by exit().
+ */
+function applyDashboardSetIntergroup(GroupListingDashboard $dashboard): string
+{
+    $method = new ReflectionMethod(GroupListingDashboard::class, 'applySetIntergroup');
 
-    protected function setUp(): void
-    {
-        parent::setUp();
+    return (string) $method->invoke($dashboard);
+}
 
-        $_POST = [];
+/**
+ * Three groups across two intergroups, listed out of day order so sorting
+ * is observable, with the alphabetically later intergroup first.
+ *
+ * @return array<int, array<string, mixed>>
+ */
+function dashboardGroupsResponse(): array
+{
+    return [
+        [
+            'id' => 2, 'groupName' => 'Tuesday Steps', 'town' => 'BATH',
+            'intergroupId' => 7, 'intergroupName' => 'BRISTOL',
+            'day' => 'Tuesday', 'startTime' => '19:30', 'endTime' => '21:00',
+        ],
+        [
+            'id' => 1, 'groupName' => 'Monday Nooners', 'town' => 'BRISTOL',
+            'intergroupId' => 9, 'intergroupName' => 'CORNWALL',
+            'day' => 'Monday', 'startTime' => '12:00', 'endTime' => '13:00',
+        ],
+        [
+            'id' => 3, 'groupName' => 'Wednesday Big Book', 'town' => 'WELLS',
+            'intergroupId' => 7, 'intergroupName' => 'BRISTOL',
+            'day' => 'Wednesday', 'startTime' => '18:00', 'endTime' => '19:30',
+        ],
+    ];
+}
 
-        $this->cache     = $this->createMock(ApiCache::class);
-        $this->dashboard = new GroupListingDashboard($this->cache);
-    }
+beforeEach(function () {
+    $_POST = [];
 
-    protected function tearDown(): void
-    {
-        $_POST = [];
+    $this->cache     = $this->createMock(ApiCache::class);
+    $this->dashboard = new GroupListingDashboard($this->cache);
 
-        parent::tearDown();
-    }
+    $this->renderWidget = fn (): string => captureOutput([$this->dashboard, 'renderDashboardWidget']);
 
-    // ── registration ──────────────────────────────────────────────────
-    #[Test]
-    public function the_constructor_registers_every_hook_the_widget_needs(): void
-    {
+    $this->catchJson = function (callable $callback): JsonResponseException {
+        try {
+            $callback();
+        } catch (JsonResponseException $e) {
+            return $e;
+        }
+
+        $this->fail('expected a JSON response to be sent');
+    };
+});
+
+afterEach(function () {
+    $_POST = [];
+});
+
+// ── registration ──────────────────────────────────────────────────
+describe('registration', function () {
+    it('registers every hook the widget needs from the constructor', function () {
         foreach (
             [
             'wp_dashboard_setup',
@@ -77,284 +119,226 @@ class GroupListingDashboardTest extends TestCase
         ) {
             $this->assertActionAdded($hook, false, 'expected ' . $hook . ' to be hooked');
         }
-    }
+    });
 
-    #[Test]
-    public function the_widget_registers_itself_on_the_dashboard(): void
-    {
+    it('registers the widget on the dashboard', function () {
         $this->dashboard->registerDashboardWidget();
 
-        $this->assertArrayHasKey('concordance_group_listings_dashboard', WpState::$widgets);
-        $this->assertSame(
-            'National Group Listings',
-            WpState::$widgets['concordance_group_listings_dashboard']['name']
-        );
-        $this->assertSame(
-            [$this->dashboard, 'renderDashboardWidget'],
-            WpState::$widgets['concordance_group_listings_dashboard']['callback']
-        );
-    }
+        expect(WpState::$widgets)->toHaveKey('concordance_group_listings_dashboard')
+            ->and(WpState::$widgets['concordance_group_listings_dashboard']['name'])
+            ->toBe('National Group Listings')
+            ->and(WpState::$widgets['concordance_group_listings_dashboard']['callback'])
+            ->toBe([$this->dashboard, 'renderDashboardWidget']);
+    });
+});
 
-    // ── widget rendering ──────────────────────────────────────────────
-    #[Test]
-    public function an_api_error_is_shown_in_place_of_the_widget(): void
-    {
+// ── widget rendering ──────────────────────────────────────────────
+describe('widget rendering', function () {
+    it('shows an API error in place of the widget', function () {
         $this->cache->method('getGroups')->willReturn(new WP_Error('http_error', 'Connection refused'));
 
-        $html = $this->renderWidget();
+        $html = ($this->renderWidget)();
 
-        $this->assertStringContainsString('gl-error', $html);
-        $this->assertStringContainsString('Connection refused', $html);
-        $this->assertStringNotContainsString('gl-card', $html);
-    }
+        expect($html)->toContain('gl-error')
+            ->toContain('Connection refused')
+            ->not->toContain('gl-card');
+    });
 
-    #[Test]
-    public function an_empty_api_response_says_so(): void
-    {
+    it('says so when the API response is empty', function () {
         $this->cache->method('getGroups')->willReturn([]);
 
-        $html = $this->renderWidget();
+        $html = ($this->renderWidget)();
 
-        $this->assertStringContainsString('No groups found from the AAGBDB API.', $html);
-        $this->assertStringNotContainsString('gl-cards', $html);
-    }
+        expect($html)->toContain('No groups found from the AAGBDB API.')
+            ->not->toContain('gl-cards');
+    });
 
-    #[Test]
-    public function every_group_gets_a_card_when_no_filter_is_set(): void
-    {
-        $this->cache->method('getGroups')->willReturn($this->groupsResponse());
+    it('gives every group a card when no filter is set', function () {
+        $this->cache->method('getGroups')->willReturn(dashboardGroupsResponse());
 
-        $html = $this->renderWidget();
+        $html = ($this->renderWidget)();
 
-        $this->assertSame(3, substr_count($html, 'class="gl-card"'));
-        $this->assertStringContainsString('Monday Nooners', $html);
-        $this->assertStringContainsString('Tuesday Steps', $html);
-        $this->assertStringContainsString('Wednesday Big Book', $html);
-        $this->assertStringContainsString('>3</span>', $html, 'the count should match the cards');
-    }
+        expect(substr_count($html, 'class="gl-card"'))->toBe(3)
+            ->and($html)->toContain('Monday Nooners')
+            ->toContain('Tuesday Steps')
+            ->toContain('Wednesday Big Book')
+            ->and(str_contains($html, '>3</span>'))->toBeTrue('the count should match the cards');
+    });
 
-    /**
-     * Cards are ordered day, then time, then name — the order someone
-     * scanning the week expects, not the order the API happened to return.
-     */
-    #[Test]
-    public function cards_are_sorted_by_day_then_time(): void
-    {
-        $this->cache->method('getGroups')->willReturn($this->groupsResponse());
+    // Cards are ordered day, then time, then name — the order someone
+    // scanning the week expects, not the order the API happened to return.
+    it('sorts the cards by day then time', function () {
+        $this->cache->method('getGroups')->willReturn(dashboardGroupsResponse());
 
-        $html = $this->renderWidget();
+        $html = ($this->renderWidget)();
 
-        $this->assertLessThan(strpos($html, 'Tuesday Steps'), strpos($html, 'Monday Nooners'));
-        $this->assertLessThan(strpos($html, 'Wednesday Big Book'), strpos($html, 'Tuesday Steps'));
-    }
+        expect(strpos($html, 'Monday Nooners'))->toBeLessThan(strpos($html, 'Tuesday Steps'))
+            ->and(strpos($html, 'Tuesday Steps'))->toBeLessThan(strpos($html, 'Wednesday Big Book'));
+    });
 
-    #[Test]
-    public function the_saved_filter_narrows_the_cards_but_not_the_dropdown(): void
-    {
+    it('narrows the cards but not the dropdown with the saved filter', function () {
         WpState::$options[ConcordanceConfiguration::OPTION_INTERGROUP_ID] = 7;
-        $this->cache->method('getGroups')->willReturn($this->groupsResponse());
+        $this->cache->method('getGroups')->willReturn(dashboardGroupsResponse());
 
-        $html = $this->renderWidget();
+        $html = ($this->renderWidget)();
 
-        $this->assertSame(2, substr_count($html, 'class="gl-card"'));
-        $this->assertStringNotContainsString('Monday Nooners', $html, 'that group is in intergroup 9');
-        // Both intergroups still appear as choices.
-        $this->assertStringContainsString('<option value="7" selected>Bristol</option>', $html);
-        $this->assertStringContainsString('<option value="9">Cornwall</option>', $html);
-    }
+        expect(substr_count($html, 'class="gl-card"'))->toBe(2)
+            ->and(str_contains($html, 'Monday Nooners'))->toBeFalse('that group is in intergroup 9')
+            // Both intergroups still appear as choices.
+            ->and($html)->toContain('<option value="7" selected>Bristol</option>')
+            ->toContain('<option value="9">Cornwall</option>');
+    });
 
-    #[Test]
-    public function a_filter_matching_nothing_explains_itself_rather_than_rendering_blank(): void
-    {
+    it('explains a filter matching nothing rather than rendering blank', function () {
         WpState::$options[ConcordanceConfiguration::OPTION_INTERGROUP_ID] = 999;
-        $this->cache->method('getGroups')->willReturn($this->groupsResponse());
+        $this->cache->method('getGroups')->willReturn(dashboardGroupsResponse());
 
-        $html = $this->renderWidget();
+        $html = ($this->renderWidget)();
 
-        $this->assertStringNotContainsString('class="gl-card"', $html);
-        $this->assertStringContainsString('No groups match the selected intergroup', $html);
-        // The now-unknown saved id is kept in the dropdown so it isn't dropped.
-        $this->assertStringContainsString('Intergroup #999 (currently saved)', $html);
-    }
+        expect($html)->not->toContain('class="gl-card"')
+            ->toContain('No groups match the selected intergroup')
+            // The now-unknown saved id is kept in the dropdown so it isn't dropped.
+            ->toContain('Intergroup #999 (currently saved)');
+    });
 
-    #[Test]
-    public function the_selector_posts_to_admin_post_with_a_nonce_and_a_no_js_fallback(): void
-    {
-        $this->cache->method('getGroups')->willReturn($this->groupsResponse());
+    it('posts the selector to admin-post with a nonce and a no-JS fallback', function () {
+        $this->cache->method('getGroups')->willReturn(dashboardGroupsResponse());
 
-        $html = $this->renderWidget();
+        $html = ($this->renderWidget)();
 
-        $this->assertStringContainsString('action="https://example.test/wp-admin/admin-post.php"', $html);
-        $this->assertStringContainsString('value="concordance_set_intergroup"', $html);
-        $this->assertStringContainsString('name="_concordance_nonce"', $html);
-        $this->assertStringContainsString('<noscript>', $html);
-    }
+        expect($html)->toContain('action="https://example.test/wp-admin/admin-post.php"')
+            ->toContain('value="concordance_set_intergroup"')
+            ->toContain('name="_concordance_nonce"')
+            ->toContain('<noscript>');
+    });
 
-    /**
-     * The inline script's element lookups run against markup emitted before
-     * it, so the script must come last or it silently binds nothing.
-     */
-    #[Test]
-    public function the_inline_script_is_emitted_after_the_cards_container(): void
-    {
-        $this->cache->method('getGroups')->willReturn($this->groupsResponse());
+    // The inline script's element lookups run against markup emitted before
+    // it, so the script must come last or it silently binds nothing.
+    it('emits the inline script after the cards container', function () {
+        $this->cache->method('getGroups')->willReturn(dashboardGroupsResponse());
 
-        $html = $this->renderWidget();
+        $html = ($this->renderWidget)();
 
-        $this->assertLessThan(
+        expect(strpos($html, 'data-concordance-cards'))->toBeLessThan(
             strpos($html, '<script>'),
-            strpos($html, 'data-concordance-cards'),
             'the cards container must exist before the script that looks it up'
-        );
-        $this->assertStringContainsString('concordance_filter_intergroup', $html);
-        $this->assertStringContainsString('"https:\/\/example.test\/wp-admin\/admin-ajax.php"', $html);
-    }
+        )
+            ->and($html)->toContain('concordance_filter_intergroup')
+            ->toContain('"https:\/\/example.test\/wp-admin\/admin-ajax.php"');
+    });
 
-    #[Test]
-    public function an_intergroup_with_no_id_is_left_out_of_the_dropdown(): void
-    {
+    it('leaves an intergroup with no id out of the dropdown', function () {
         $this->cache->method('getGroups')->willReturn([
             ['id' => 1, 'groupName' => 'A', 'intergroupId' => 0, 'intergroupName' => 'Unassigned'],
             ['id' => 2, 'groupName' => 'B', 'intergroupId' => 5, 'intergroupName' => ''],
         ]);
 
-        $html = $this->renderWidget();
+        $html = ($this->renderWidget)();
 
-        $this->assertStringNotContainsString('Unassigned', $html);
-        $this->assertStringContainsString('<option value="5">Intergroup #5</option>', $html);
-    }
+        expect($html)->not->toContain('Unassigned')
+            ->toContain('<option value="5">Intergroup #5</option>');
+    });
+});
 
-    // ── card contents ─────────────────────────────────────────────────
-    #[Test]
-    public function only_the_enabled_fields_appear_on_a_card(): void
-    {
+// ── card contents ─────────────────────────────────────────────────
+describe('card contents', function () {
+    it('shows only the enabled fields on a card', function () {
         WpState::$options[ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS] = ['town'];
-        $this->cache->method('getGroups')->willReturn($this->groupsResponse());
+        $this->cache->method('getGroups')->willReturn(dashboardGroupsResponse());
 
-        $html = $this->renderWidget();
+        $html = ($this->renderWidget)();
 
-        $this->assertStringContainsString('>Town</div>', $html);
-        $this->assertStringNotContainsString('>Day</div>', $html);
-        $this->assertStringNotContainsString('>Start Time</div>', $html);
-    }
+        expect($html)->toContain('>Town</div>')
+            ->not->toContain('>Day</div>')
+            ->not->toContain('>Start Time</div>');
+    });
 
-    #[Test]
-    public function fields_are_rendered_in_whitelist_order_not_submission_order(): void
-    {
+    it('renders fields in whitelist order, not submission order', function () {
         WpState::$options[ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS] = ['postcode', 'day'];
         $this->cache->method('getGroups')->willReturn([
             ['id' => 1, 'groupName' => 'A', 'day' => 'Monday', 'postcode' => 'BS1 1AA'],
         ]);
 
-        $html = $this->renderWidget();
+        $html = ($this->renderWidget)();
 
-        $this->assertLessThan(strpos($html, '>Postcode</div>'), strpos($html, '>Day</div>'));
-    }
+        expect(strpos($html, '>Day</div>'))->toBeLessThan(strpos($html, '>Postcode</div>'));
+    });
 
-    #[Test]
-    public function a_corrupted_fields_option_falls_back_to_the_defaults(): void
-    {
+    it('falls back to the defaults for a corrupted fields option', function () {
         WpState::$options[ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS] = 'corrupted';
-        $this->cache->method('getGroups')->willReturn($this->groupsResponse());
+        $this->cache->method('getGroups')->willReturn(dashboardGroupsResponse());
 
-        $html = $this->renderWidget();
+        $html = ($this->renderWidget)();
 
-        $this->assertStringContainsString('>Day</div>', $html);
-        $this->assertStringContainsString('>Town</div>', $html);
-    }
+        expect($html)->toContain('>Day</div>')
+            ->toContain('>Town</div>');
+    });
 
-    /**
-     * An enabled-but-unusable field would otherwise render as an empty labelled
-     * row on every card.
-     */
-    #[DataProvider('skippedValues')]
-    #[Test]
-    public function unusable_field_values_are_skipped(mixed $value): void
-    {
+    // An enabled-but-unusable field would otherwise render as an empty labelled
+    // row on every card.
+    it('skips unusable field values', function (mixed $value) {
         WpState::$options[ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS] = ['notes'];
         $this->cache->method('getGroups')->willReturn([
             ['id' => 1, 'groupName' => 'A', 'notes' => $value],
         ]);
 
-        $html = $this->renderWidget();
+        $html = ($this->renderWidget)();
 
-        $this->assertStringNotContainsString('gl-card-content', $html);
-        $this->assertStringContainsString('<strong>A</strong>', $html, 'the card itself should still render');
-    }
+        expect($html)->not->toContain('gl-card-content')
+            ->and(str_contains($html, '<strong>A</strong>'))->toBeTrue('the card itself should still render');
+    })->with([
+        'null'          => [null],
+        'empty string'  => [''],
+        'false'         => [false],
+        'a nested list' => [['a', 'b']],
+        'an object'     => [(object) ['a' => 'b']],
+    ]);
 
-    /** @return array<string, array{0: mixed}> */
-    public static function skippedValues(): array
-    {
-        return [
-            'null'         => [null],
-            'empty string' => [''],
-            'false'        => [false],
-            'a nested list' => [['a', 'b']],
-            'an object'    => [(object) ['a' => 'b']],
-        ];
-    }
-
-    #[Test]
-    public function a_field_absent_from_the_api_payload_is_skipped(): void
-    {
+    it('skips a field absent from the API payload', function () {
         WpState::$options[ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS] = ['notes', 'town'];
         $this->cache->method('getGroups')->willReturn([
             ['id' => 1, 'groupName' => 'A', 'town' => 'BRISTOL'],
         ]);
 
-        $html = $this->renderWidget();
+        $html = ($this->renderWidget)();
 
-        $this->assertStringContainsString('>Town</div>', $html);
-        $this->assertStringNotContainsString('>Notes</div>', $html);
-    }
+        expect($html)->toContain('>Town</div>')
+            ->not->toContain('>Notes</div>');
+    });
 
-    #[Test]
-    public function a_true_flag_renders_as_yes(): void
-    {
+    it('renders a true flag as Yes', function () {
         WpState::$options[ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS] = ['wheelchair'];
         $this->cache->method('getGroups')->willReturn([
             ['id' => 1, 'groupName' => 'A', 'wheelchair' => true],
         ]);
 
-        $html = $this->renderWidget();
+        $html = ($this->renderWidget)();
 
-        $this->assertStringContainsString('>Wheelchair Accessible</div>', $html);
-        $this->assertStringContainsString('>Yes</div>', $html);
-    }
+        expect($html)->toContain('>Wheelchair Accessible</div>')
+            ->toContain('>Yes</div>');
+    });
 
-    #[Test]
-    public function a_url_field_becomes_a_new_tab_link(): void
-    {
+    it('turns a URL field into a new-tab link', function () {
         WpState::$options[ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS] = ['notes'];
         $this->cache->method('getGroups')->willReturn([
             ['id' => 1, 'groupName' => 'A', 'notes' => 'https://example.test/hall'],
         ]);
 
-        $html = $this->renderWidget();
+        $html = ($this->renderWidget)();
 
-        $this->assertStringContainsString(
-            '<a href="https://example.test/hall" target="_blank" rel="noopener">',
-            $html
-        );
-    }
+        expect($html)->toContain('<a href="https://example.test/hall" target="_blank" rel="noopener">');
+    });
 
-    #[Test]
-    public function an_email_field_becomes_a_mailto_link(): void
-    {
+    it('turns an email field into a mailto link', function () {
         WpState::$options[ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS] = ['regionHelpline'];
         $this->cache->method('getGroups')->willReturn([
             ['id' => 1, 'groupName' => 'A', 'regionHelpline' => 'help@example.test'],
         ]);
 
-        $this->assertStringContainsString(
-            '<a href="mailto:help@example.test">',
-            $this->renderWidget()
-        );
-    }
+        expect(($this->renderWidget)())->toContain('<a href="mailto:help@example.test">');
+    });
 
-    #[Test]
-    public function a_long_value_gets_the_full_width_class(): void
-    {
+    it('gives a long value the full-width class', function () {
         WpState::$options[ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS] = ['notes', 'town'];
         $this->cache->method('getGroups')->willReturn([
             [
@@ -363,335 +347,182 @@ class GroupListingDashboardTest extends TestCase
             ],
         ]);
 
-        $html = $this->renderWidget();
+        $html = ($this->renderWidget)();
 
-        $this->assertStringContainsString('class="gl-card-field gl-card-field-full"', $html);
-        $this->assertStringContainsString('class="gl-card-field"', $html, 'the short field stays half-width');
-    }
+        expect($html)->toContain('class="gl-card-field gl-card-field-full"')
+            ->and(str_contains($html, 'class="gl-card-field"'))->toBeTrue('the short field stays half-width');
+    });
 
-    /**
-     * @param array<string, mixed> $raw
-     */
-    #[DataProvider('nameKeys')]
-    #[Test]
-    public function the_card_title_falls_back_through_the_api_name_keys(array $raw, string $expected): void
-    {
+    it('falls back through the API name keys for the card title', function (array $raw, string $expected) {
         $this->cache->method('getGroups')->willReturn([['id' => 1] + $raw]);
 
-        $this->assertStringContainsString(
-            '<strong>' . $expected . '</strong>',
-            $this->renderWidget()
-        );
+        expect(($this->renderWidget)())->toContain('<strong>' . $expected . '</strong>');
+    })->with([
+        'groupName'      => [['groupName' => 'From groupName'], 'From groupName'],
+        'name'           => [['name' => 'From name'], 'From name'],
+        'title'          => [['title' => 'From title'], 'From title'],
+        'groupName wins' => [['groupName' => 'First', 'name' => 'Second'], 'First'],
+        'nothing usable' => [[], 'Unknown Group'],
+    ]);
+});
+
+// ── admin styles ──────────────────────────────────────────────────
+it('loads the widget styles on the dashboard only', function (?string $screenId, bool $expected) {
+    WpState::$screen = $screenId === null ? null : (object) ['id' => $screenId];
+
+    $html = captureOutput([$this->dashboard, 'addDashboardStyles']);
+
+    if ($expected) {
+        expect($html)->toContain('.gl-dashboard-widget');
+    } else {
+        expect($html)->toBe('');
     }
+})->with([
+    'no screen yet'   => [null, false],
+    'the post editor' => ['edit-post', false],
+    'the dashboard'   => ['dashboard', true],
+]);
 
-    /** @return array<string, array{0: array<string, mixed>, 1: string}> */
-    public static function nameKeys(): array
-    {
-        return [
-            'groupName'      => [['groupName' => 'From groupName'], 'From groupName'],
-            'name'           => [['name' => 'From name'], 'From name'],
-            'title'          => [['title' => 'From title'], 'From title'],
-            'groupName wins' => [['groupName' => 'First', 'name' => 'Second'], 'First'],
-            'nothing usable' => [[], 'Unknown Group'],
-        ];
-    }
-
-    // ── admin styles ──────────────────────────────────────────────────
-    #[DataProvider('screens')]
-    #[Test]
-    public function the_widget_styles_load_on_the_dashboard_only(?string $screenId, bool $expected): void
-    {
-        WpState::$screen = $screenId === null ? null : (object) ['id' => $screenId];
-
-        $html = $this->render([$this->dashboard, 'addDashboardStyles']);
-
-        if ($expected) {
-            $this->assertStringContainsString('.gl-dashboard-widget', $html);
-        } else {
-            $this->assertSame('', $html);
-        }
-    }
-
-    /** @return array<string, array{0: string|null, 1: bool}> */
-    public static function screens(): array
-    {
-        return [
-            'no screen yet'   => [null, false],
-            'the post editor' => ['edit-post', false],
-            'the dashboard'   => ['dashboard', true],
-        ];
-    }
-
-    // ── the admin-post handler ────────────────────────────────────────
-    #[Test]
-    public function the_filter_form_refuses_a_user_without_either_capability(): void
-    {
+// ── the admin-post handler ────────────────────────────────────────
+describe('the admin-post handler', function () {
+    it('refuses a user without either capability', function () {
         WpState::$userCan = false;
 
-        $this->expectException(WpDieException::class);
         $this->dashboard->handleSetIntergroup();
-    }
+    })->throws(WpDieException::class);
 
-    #[Test]
-    public function the_filter_form_refuses_a_forged_nonce(): void
-    {
+    it('refuses a forged nonce', function () {
         $_POST = ['_concordance_nonce' => 'forged', 'intergroup_id' => '7'];
 
-        try {
-            $this->dashboard->handleSetIntergroup();
-            $this->fail('expected wp_die() to be called');
-        } catch (WpDieException $e) {
-            $this->assertArrayNotHasKey(
+        expect(fn () => $this->dashboard->handleSetIntergroup())->toThrow(WpDieException::class)
+            ->and(WpState::$options)->not->toHaveKey(
                 ConcordanceConfiguration::OPTION_INTERGROUP_ID,
-                WpState::$options,
-                'a rejected request must not write the option'
+                message: 'a rejected request must not write the option'
             );
-        }
-    }
+    });
 
-    #[Test]
-    public function a_missing_nonce_is_treated_as_a_forged_one(): void
-    {
+    it('treats a missing nonce as a forged one', function () {
         $_POST = ['intergroup_id' => '7'];
 
-        $this->expectException(WpDieException::class);
         $this->dashboard->handleSetIntergroup();
-    }
+    })->throws(WpDieException::class);
 
-    #[DataProvider('submittedFilters')]
-    #[Test]
-    public function the_submitted_filter_is_sanitised_and_saved(mixed $submitted, int $expected): void
-    {
+    it('sanitises and saves the submitted filter', function (mixed $submitted, int $expected) {
         $_POST = ['intergroup_id' => $submitted];
 
-        $this->applySetIntergroup();
+        applyDashboardSetIntergroup($this->dashboard);
 
-        $this->assertSame(
-            $expected,
-            WpState::$options[ConcordanceConfiguration::OPTION_INTERGROUP_ID]
-        );
-    }
+        expect(WpState::$options[ConcordanceConfiguration::OPTION_INTERGROUP_ID])->toBe($expected);
+    })->with([
+        'a numeric string' => ['7', 7],
+        'the all sentinel' => ['0', 0],
+        'a negative value' => ['-7', 7],
+        'not a number'     => ['nonsense', 0],
+    ]);
 
-    /** @return array<string, array{0: mixed, 1: int}> */
-    public static function submittedFilters(): array
-    {
-        return [
-            'a numeric string' => ['7', 7],
-            'the all sentinel' => ['0', 0],
-            'a negative value' => ['-7', 7],
-            'not a number'     => ['nonsense', 0],
-        ];
-    }
+    it('saves the all sentinel for an absent filter value', function () {
+        applyDashboardSetIntergroup($this->dashboard);
 
-    #[Test]
-    public function an_absent_filter_value_saves_the_all_sentinel(): void
-    {
-        $this->applySetIntergroup();
+        expect(WpState::$options[ConcordanceConfiguration::OPTION_INTERGROUP_ID])
+            ->toBe(ConcordanceConfiguration::INTERGROUP_ID_ALL);
+    });
 
-        $this->assertSame(
-            ConcordanceConfiguration::INTERGROUP_ID_ALL,
-            WpState::$options[ConcordanceConfiguration::OPTION_INTERGROUP_ID]
-        );
-    }
-
-    #[Test]
-    public function the_handler_returns_to_the_posted_referer(): void
-    {
+    it('returns to the posted referer', function () {
         $_POST = ['_wp_http_referer' => 'https://example.test/wp-admin/index.php?page=2'];
 
-        $this->assertSame(
-            'https://example.test/wp-admin/index.php?page=2',
-            $this->applySetIntergroup()
-        );
-    }
+        expect(applyDashboardSetIntergroup($this->dashboard))
+            ->toBe('https://example.test/wp-admin/index.php?page=2');
+    });
 
-    #[Test]
-    public function the_handler_falls_back_to_the_dashboard_without_a_referer(): void
-    {
-        $this->assertSame(
-            'https://example.test/wp-admin/index.php',
-            $this->applySetIntergroup()
-        );
-    }
+    it('falls back to the dashboard without a referer', function () {
+        expect(applyDashboardSetIntergroup($this->dashboard))
+            ->toBe('https://example.test/wp-admin/index.php');
+    });
+});
 
-    // ── the AJAX endpoint ─────────────────────────────────────────────
-    #[Test]
-    public function the_ajax_endpoint_refuses_a_user_without_either_capability(): void
-    {
+// ── the AJAX endpoint ─────────────────────────────────────────────
+describe('the AJAX endpoint', function () {
+    it('refuses a user without either capability', function () {
         WpState::$userCan = false;
 
-        $error = $this->catchJson(fn () => $this->dashboard->ajaxFilterIntergroup());
+        $error = ($this->catchJson)(fn () => $this->dashboard->ajaxFilterIntergroup());
 
-        $this->assertFalse($error->success);
-        $this->assertSame(403, $error->status);
-    }
+        expect($error->success)->toBeFalse()
+            ->and($error->status)->toBe(403);
+    });
 
-    #[Test]
-    public function the_ajax_endpoint_refuses_a_forged_nonce(): void
-    {
+    it('refuses a forged nonce', function () {
         $_POST = ['_concordance_nonce' => 'forged'];
 
-        $error = $this->catchJson(fn () => $this->dashboard->ajaxFilterIntergroup());
+        $error = ($this->catchJson)(fn () => $this->dashboard->ajaxFilterIntergroup());
 
-        $this->assertFalse($error->success);
-        $this->assertSame(403, $error->status);
-        $this->assertArrayNotHasKey(
-            ConcordanceConfiguration::OPTION_INTERGROUP_ID,
-            WpState::$options,
-            'a rejected request must not write the option'
-        );
-    }
+        expect($error->success)->toBeFalse()
+            ->and($error->status)->toBe(403)
+            ->and(WpState::$options)->not->toHaveKey(
+                ConcordanceConfiguration::OPTION_INTERGROUP_ID,
+                message: 'a rejected request must not write the option'
+            );
+    });
 
-    #[Test]
-    public function the_ajax_endpoint_refuses_a_request_with_no_nonce_at_all(): void
-    {
-        $error = $this->catchJson(fn () => $this->dashboard->ajaxFilterIntergroup());
+    it('refuses a request with no nonce at all', function () {
+        $error = ($this->catchJson)(fn () => $this->dashboard->ajaxFilterIntergroup());
 
-        $this->assertFalse($error->success);
-        $this->assertSame(403, $error->status);
-    }
+        expect($error->success)->toBeFalse()
+            ->and($error->status)->toBe(403);
+    });
 
-    #[Test]
-    public function the_ajax_endpoint_reports_an_api_error_as_a_server_error(): void
-    {
-        $this->postFilter(7);
+    it('reports an API error as a server error', function () {
+        postDashboardFilter(7);
         $this->cache->method('getGroups')->willReturn(new WP_Error('http_error', 'Connection refused'));
 
-        $error = $this->catchJson(fn () => $this->dashboard->ajaxFilterIntergroup());
+        $error = ($this->catchJson)(fn () => $this->dashboard->ajaxFilterIntergroup());
 
-        $this->assertFalse($error->success);
-        $this->assertSame(500, $error->status);
-        $this->assertSame(['message' => 'Connection refused'], $error->data);
-    }
+        expect($error->success)->toBeFalse()
+            ->and($error->status)->toBe(500)
+            ->and($error->data)->toBe(['message' => 'Connection refused']);
+    });
 
-    #[Test]
-    public function the_ajax_endpoint_saves_the_filter_and_returns_the_matching_cards(): void
-    {
-        $this->postFilter(7);
-        $this->cache->method('getGroups')->willReturn($this->groupsResponse());
+    it('saves the filter and returns the matching cards', function () {
+        postDashboardFilter(7);
+        $this->cache->method('getGroups')->willReturn(dashboardGroupsResponse());
 
-        $success = $this->catchJson(fn () => $this->dashboard->ajaxFilterIntergroup());
+        $success = ($this->catchJson)(fn () => $this->dashboard->ajaxFilterIntergroup());
 
-        $this->assertTrue($success->success);
-        $this->assertSame(7, WpState::$options[ConcordanceConfiguration::OPTION_INTERGROUP_ID]);
-        $this->assertSame(2, $success->data['count']);
-        $this->assertSame(2, substr_count($success->data['html'], 'class="gl-card"'));
-        $this->assertStringNotContainsString('Monday Nooners', $success->data['html']);
-    }
+        expect($success->success)->toBeTrue()
+            ->and(WpState::$options[ConcordanceConfiguration::OPTION_INTERGROUP_ID])->toBe(7)
+            ->and($success->data['count'])->toBe(2)
+            ->and(substr_count($success->data['html'], 'class="gl-card"'))->toBe(2)
+            ->and($success->data['html'])->not->toContain('Monday Nooners');
+    });
 
-    #[Test]
-    public function the_ajax_endpoint_returns_every_card_for_the_all_sentinel(): void
-    {
-        $this->postFilter(ConcordanceConfiguration::INTERGROUP_ID_ALL);
-        $this->cache->method('getGroups')->willReturn($this->groupsResponse());
+    it('returns every card for the all sentinel', function () {
+        postDashboardFilter(ConcordanceConfiguration::INTERGROUP_ID_ALL);
+        $this->cache->method('getGroups')->willReturn(dashboardGroupsResponse());
 
-        $success = $this->catchJson(fn () => $this->dashboard->ajaxFilterIntergroup());
+        $success = ($this->catchJson)(fn () => $this->dashboard->ajaxFilterIntergroup());
 
-        $this->assertSame(3, $success->data['count']);
-    }
+        expect($success->data['count'])->toBe(3);
+    });
 
-    /**
-     * The swapped-in region is the cards only — re-rendering the selector too
-     * would nest a second form inside the first.
-     */
-    #[Test]
-    public function the_ajax_payload_carries_the_cards_without_the_selector(): void
-    {
-        $this->postFilter(ConcordanceConfiguration::INTERGROUP_ID_ALL);
-        $this->cache->method('getGroups')->willReturn($this->groupsResponse());
+    // The swapped-in region is the cards only — re-rendering the selector too
+    // would nest a second form inside the first.
+    it('carries the cards without the selector in its payload', function () {
+        postDashboardFilter(ConcordanceConfiguration::INTERGROUP_ID_ALL);
+        $this->cache->method('getGroups')->willReturn(dashboardGroupsResponse());
 
-        $html = $this->catchJson(fn () => $this->dashboard->ajaxFilterIntergroup())->data['html'];
+        $html = ($this->catchJson)(fn () => $this->dashboard->ajaxFilterIntergroup())->data['html'];
 
-        $this->assertStringNotContainsString('<form', $html);
-        $this->assertStringNotContainsString('<select', $html);
-    }
+        expect($html)->not->toContain('<form')
+            ->not->toContain('<select');
+    });
 
-    #[Test]
-    public function an_ajax_filter_matching_nothing_returns_the_empty_message(): void
-    {
-        $this->postFilter(999);
-        $this->cache->method('getGroups')->willReturn($this->groupsResponse());
+    it('returns the empty message for a filter matching nothing', function () {
+        postDashboardFilter(999);
+        $this->cache->method('getGroups')->willReturn(dashboardGroupsResponse());
 
-        $success = $this->catchJson(fn () => $this->dashboard->ajaxFilterIntergroup());
+        $success = ($this->catchJson)(fn () => $this->dashboard->ajaxFilterIntergroup());
 
-        $this->assertSame(0, $success->data['count']);
-        $this->assertStringContainsString('No groups match the selected intergroup', $success->data['html']);
-    }
-
-    // ── helpers ───────────────────────────────────────────────────────
-
-    /** Mark the current request as a nonce-verified filter submission. */
-    private function postFilter(int $intergroupId): void
-    {
-        $_POST = [
-            '_concordance_nonce' => 'nonce-concordance_set_intergroup',
-            'intergroup_id'      => (string) $intergroupId,
-        ];
-    }
-
-    /**
-     * Invoke the branch of handleSetIntergroup() that would otherwise be
-     * followed by exit().
-     */
-    private function applySetIntergroup(): string
-    {
-        $method = new ReflectionMethod(GroupListingDashboard::class, 'applySetIntergroup');
-
-        return (string) $method->invoke($this->dashboard);
-    }
-
-    private function catchJson(callable $callback): JsonResponseException
-    {
-        try {
-            $callback();
-        } catch (JsonResponseException $e) {
-            return $e;
-        }
-
-        $this->fail('expected a JSON response to be sent');
-    }
-
-    private function renderWidget(): string
-    {
-        return $this->render([$this->dashboard, 'renderDashboardWidget']);
-    }
-
-    private function render(callable $callback): string
-    {
-        ob_start();
-        try {
-            $callback();
-        } finally {
-            $html = (string) ob_get_clean();
-        }
-
-        return $html;
-    }
-
-    /**
-     * Three groups across two intergroups, listed out of day order so sorting
-     * is observable, with the alphabetically later intergroup first.
-     *
-     * @return array<int, array<string, mixed>>
-     */
-    private function groupsResponse(): array
-    {
-        return [
-            [
-                'id' => 2, 'groupName' => 'Tuesday Steps', 'town' => 'BATH',
-                'intergroupId' => 7, 'intergroupName' => 'BRISTOL',
-                'day' => 'Tuesday', 'startTime' => '19:30', 'endTime' => '21:00',
-            ],
-            [
-                'id' => 1, 'groupName' => 'Monday Nooners', 'town' => 'BRISTOL',
-                'intergroupId' => 9, 'intergroupName' => 'CORNWALL',
-                'day' => 'Monday', 'startTime' => '12:00', 'endTime' => '13:00',
-            ],
-            [
-                'id' => 3, 'groupName' => 'Wednesday Big Book', 'town' => 'WELLS',
-                'intergroupId' => 7, 'intergroupName' => 'BRISTOL',
-                'day' => 'Wednesday', 'startTime' => '18:00', 'endTime' => '19:30',
-            ],
-        ];
-    }
-}
+        expect($success->data['count'])->toBe(0)
+            ->and($success->data['html'])->toContain('No groups match the selected intergroup');
+    });
+});

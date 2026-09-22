@@ -4,333 +4,292 @@ declare(strict_types=1);
 
 namespace Concordance\Tests\Unit\Models;
 
-use PHPUnit\Framework\Attributes\Test;
 use Concordance\Models\GroupListing;
-use PHPUnit\Framework\TestCase;
 
-/**
+/*
  * Tests for the GroupListing value object.
  *
  * GroupListing is a pure value object with no WordPress dependencies
  * except getFormattedLastUpdate() which calls wp_date(). That method
  * is tested separately with a function stub.
  */
-class GroupListingTest extends TestCase
+
+/**
+ * Helper: build a minimal valid API record array.
+ *
+ * @param array<string, mixed> $overrides
+ * @return array<string, mixed>
+ */
+function sampleListingData(array $overrides = []): array
 {
-    /**
-     * Helper: build a minimal valid API record array.
-     */
-    private function sampleData(array $overrides = []): array
-    {
-        return array_merge([
-            'id'              => 42,
-            'groupName'       => 'SERENITY',
-            'town'            => 'BRISTOL',
-            'intergroupName'  => 'BRISTOL INTERGROUP',
-            'intergroupId'    => 5,
-            'day'             => 'Monday',
-            'startTime'       => '19:30',
-            'endTime'         => '20:30',
-            'lastUpdate'      => '2024-06-15T00:00:00',
-        ], $overrides);
-    }
+    return array_merge([
+        'id'              => 42,
+        'groupName'       => 'SERENITY',
+        'town'            => 'BRISTOL',
+        'intergroupName'  => 'BRISTOL INTERGROUP',
+        'intergroupId'    => 5,
+        'day'             => 'Monday',
+        'startTime'       => '19:30',
+        'endTime'         => '20:30',
+        'lastUpdate'      => '2024-06-15T00:00:00',
+    ], $overrides);
+}
 
-    // ── fromArray factory ───────────────────────────────────────────
-    #[Test]
-    public function fromArray_creates_listing_with_correct_values(): void
-    {
-        $listing = GroupListing::fromArray($this->sampleData());
+// ── fromArray factory ───────────────────────────────────────────
+describe('fromArray', function () {
+    it('creates a listing with the correct values', function () {
+        $listing = GroupListing::fromArray(sampleListingData());
 
-        $this->assertSame(42, $listing->getId());
-        $this->assertSame('SERENITY', $listing->getGroupName());
-        $this->assertSame('BRISTOL', $listing->getTown());
-        $this->assertSame('BRISTOL INTERGROUP', $listing->getIntergroupName());
-        $this->assertSame(5, $listing->getIntergroupId());
-        $this->assertSame('Monday', $listing->getDay());
-        $this->assertSame('19:30', $listing->getStartTime());
-        $this->assertSame('20:30', $listing->getEndTime());
-        $this->assertSame('2024-06-15T00:00:00', $listing->getLastUpdate());
-    }
+        expect($listing->getId())->toBe(42)
+            ->and($listing->getGroupName())->toBe('SERENITY')
+            ->and($listing->getTown())->toBe('BRISTOL')
+            ->and($listing->getIntergroupName())->toBe('BRISTOL INTERGROUP')
+            ->and($listing->getIntergroupId())->toBe(5)
+            ->and($listing->getDay())->toBe('Monday')
+            ->and($listing->getStartTime())->toBe('19:30')
+            ->and($listing->getEndTime())->toBe('20:30')
+            ->and($listing->getLastUpdate())->toBe('2024-06-15T00:00:00');
+    });
 
-    #[Test]
-    public function fromArray_defaults_missing_fields(): void
-    {
+    it('defaults missing fields', function () {
         $listing = GroupListing::fromArray([]);
 
-        $this->assertSame(0, $listing->getId());
-        $this->assertSame('', $listing->getGroupName());
-        $this->assertSame('', $listing->getTown());
-        $this->assertSame('', $listing->getIntergroupName());
-        $this->assertSame(0, $listing->getIntergroupId());
-        $this->assertSame('', $listing->getDay());
-        $this->assertSame('', $listing->getStartTime());
-        $this->assertSame('', $listing->getEndTime());
-        $this->assertSame('', $listing->getLastUpdate());
-    }
+        expect($listing->getId())->toBe(0)
+            ->and($listing->getGroupName())->toBe('')
+            ->and($listing->getTown())->toBe('')
+            ->and($listing->getIntergroupName())->toBe('')
+            ->and($listing->getIntergroupId())->toBe(0)
+            ->and($listing->getDay())->toBe('')
+            ->and($listing->getStartTime())->toBe('')
+            ->and($listing->getEndTime())->toBe('')
+            ->and($listing->getLastUpdate())->toBe('');
+    });
 
-    #[Test]
-    public function fromArray_preserves_raw_data(): void
-    {
-        $data = $this->sampleData(['extraField' => 'bonus']);
+    it('preserves the raw data', function () {
+        $data = sampleListingData(['extraField' => 'bonus']);
         $listing = GroupListing::fromArray($data);
 
-        $this->assertSame($data, $listing->getRaw());
-        $this->assertSame('bonus', $listing->getRawValue('extraField'));
-        $this->assertNull($listing->getRawValue('nonexistent'));
-        $this->assertSame('fallback', $listing->getRawValue('nonexistent', 'fallback'));
-    }
+        expect($listing->getRaw())->toBe($data)
+            ->and($listing->getRawValue('extraField'))->toBe('bonus')
+            ->and($listing->getRawValue('nonexistent'))->toBeNull()
+            ->and($listing->getRawValue('nonexistent', 'fallback'))->toBe('fallback');
+    });
 
-    #[Test]
-    public function fromArray_casts_id_and_intergroupId_to_int(): void
-    {
-        $listing = GroupListing::fromArray($this->sampleData([
+    it('casts id and intergroupId to int', function () {
+        $listing = GroupListing::fromArray(sampleListingData([
             'id'            => '99',
             'intergroupId'  => '7',
         ]));
 
-        $this->assertSame(99, $listing->getId());
-        $this->assertSame(7, $listing->getIntergroupId());
-    }
+        expect($listing->getId())->toBe(99)
+            ->and($listing->getIntergroupId())->toBe(7);
+    });
+});
 
-    // ── collectionFromResponse ──────────────────────────────────────
-    #[Test]
-    public function collectionFromResponse_handles_flat_array(): void
-    {
+// ── collectionFromResponse ──────────────────────────────────────
+describe('collectionFromResponse', function () {
+    it('handles a flat array', function () {
         $response = [
-            $this->sampleData(['id' => 1]),
-            $this->sampleData(['id' => 2]),
+            sampleListingData(['id' => 1]),
+            sampleListingData(['id' => 2]),
         ];
 
         $collection = GroupListing::collectionFromResponse($response);
 
-        $this->assertCount(2, $collection);
-        $this->assertSame(1, $collection[0]->getId());
-        $this->assertSame(2, $collection[1]->getId());
-    }
+        expect($collection)->toHaveCount(2)
+            ->and($collection[0]->getId())->toBe(1)
+            ->and($collection[1]->getId())->toBe(2);
+    });
 
-    #[Test]
-    public function collectionFromResponse_handles_results_wrapper(): void
-    {
+    it('handles a results wrapper', function () {
         $response = [
             'results' => [
-                $this->sampleData(['id' => 10]),
+                sampleListingData(['id' => 10]),
             ],
         ];
 
         $collection = GroupListing::collectionFromResponse($response);
 
-        $this->assertCount(1, $collection);
-        $this->assertSame(10, $collection[0]->getId());
-    }
+        expect($collection)->toHaveCount(1)
+            ->and($collection[0]->getId())->toBe(10);
+    });
 
-    #[Test]
-    public function collectionFromResponse_handles_data_wrapper(): void
-    {
+    it('handles a data wrapper', function () {
         $response = [
             'data' => [
-                $this->sampleData(['id' => 20]),
-                $this->sampleData(['id' => 21]),
+                sampleListingData(['id' => 20]),
+                sampleListingData(['id' => 21]),
             ],
         ];
 
         $collection = GroupListing::collectionFromResponse($response);
 
-        $this->assertCount(2, $collection);
-    }
+        expect($collection)->toHaveCount(2);
+    });
 
-    #[Test]
-    public function collectionFromResponse_wraps_single_object(): void
-    {
-        $response = $this->sampleData(['id' => 55]);
+    it('wraps a single object', function () {
+        $response = sampleListingData(['id' => 55]);
 
         $collection = GroupListing::collectionFromResponse($response);
 
-        $this->assertCount(1, $collection);
-        $this->assertSame(55, $collection[0]->getId());
-    }
+        expect($collection)->toHaveCount(1)
+            ->and($collection[0]->getId())->toBe(55);
+    });
 
-    #[Test]
-    public function collectionFromResponse_handles_empty_array(): void
-    {
+    it('handles an empty array', function () {
         $collection = GroupListing::collectionFromResponse([]);
 
-        $this->assertCount(0, $collection);
-    }
+        expect($collection)->toHaveCount(0);
+    });
+});
 
-    // ── Display helpers ─────────────────────────────────────────────
-    #[Test]
-    public function getTimeRange_returns_start_and_end(): void
-    {
-        $listing = GroupListing::fromArray($this->sampleData());
+// ── Display helpers ─────────────────────────────────────────────
+describe('display helpers', function () {
+    it('gives a time range of start and end', function () {
+        $listing = GroupListing::fromArray(sampleListingData());
 
-        $this->assertSame('19:30 – 20:30', $listing->getTimeRange());
-    }
+        expect($listing->getTimeRange())->toBe('19:30 – 20:30');
+    });
 
-    #[Test]
-    public function getTimeRange_returns_start_only_when_no_end(): void
-    {
-        $listing = GroupListing::fromArray($this->sampleData(['endTime' => '']));
+    it('gives a time range of the start only when there is no end', function () {
+        $listing = GroupListing::fromArray(sampleListingData(['endTime' => '']));
 
-        $this->assertSame('19:30', $listing->getTimeRange());
-    }
+        expect($listing->getTimeRange())->toBe('19:30');
+    });
 
-    #[Test]
-    public function getTimeRange_returns_empty_when_no_start(): void
-    {
-        $listing = GroupListing::fromArray($this->sampleData(['startTime' => '']));
+    it('gives an empty time range when there is no start', function () {
+        $listing = GroupListing::fromArray(sampleListingData(['startTime' => '']));
 
-        $this->assertSame('', $listing->getTimeRange());
-    }
+        expect($listing->getTimeRange())->toBe('');
+    });
 
-    #[Test]
-    public function hasTown_returns_true_when_town_set(): void
-    {
-        $listing = GroupListing::fromArray($this->sampleData());
+    it('has a town when the town is set', function () {
+        $listing = GroupListing::fromArray(sampleListingData());
 
-        $this->assertTrue($listing->hasTown());
-    }
+        expect($listing->hasTown())->toBeTrue();
+    });
 
-    #[Test]
-    public function hasTown_returns_false_when_town_empty(): void
-    {
-        $listing = GroupListing::fromArray($this->sampleData(['town' => '']));
+    it('has no town when the town is empty', function () {
+        $listing = GroupListing::fromArray(sampleListingData(['town' => '']));
 
-        $this->assertFalse($listing->hasTown());
-    }
+        expect($listing->hasTown())->toBeFalse();
+    });
 
-    #[Test]
-    public function isValid_returns_true_when_name_set(): void
-    {
-        $listing = GroupListing::fromArray($this->sampleData());
+    it('is valid when the name is set', function () {
+        $listing = GroupListing::fromArray(sampleListingData());
 
-        $this->assertTrue($listing->isValid());
-    }
+        expect($listing->isValid())->toBeTrue();
+    });
 
-    #[Test]
-    public function isValid_returns_false_when_name_empty(): void
-    {
-        $listing = GroupListing::fromArray($this->sampleData(['groupName' => '']));
+    it('is not valid when the name is empty', function () {
+        $listing = GroupListing::fromArray(sampleListingData(['groupName' => '']));
 
-        $this->assertFalse($listing->isValid());
-    }
+        expect($listing->isValid())->toBeFalse();
+    });
+});
 
-    // ── Serialisation ───────────────────────────────────────────────
-    #[Test]
-    public function toArray_returns_api_shaped_array(): void
-    {
-        $data = $this->sampleData();
+// ── Serialisation ───────────────────────────────────────────────
+describe('serialisation', function () {
+    it('returns an API-shaped array from toArray', function () {
+        $data = sampleListingData();
         $listing = GroupListing::fromArray($data);
 
         $array = $listing->toArray();
 
-        $this->assertSame(42, $array['id']);
-        $this->assertSame('SERENITY', $array['groupName']);
-        $this->assertSame('Monday', $array['day']);
-        $this->assertSame('19:30', $array['startTime']);
-        $this->assertArrayNotHasKey('raw', $array);
-    }
+        expect($array['id'])->toBe(42)
+            ->and($array['groupName'])->toBe('SERENITY')
+            ->and($array['day'])->toBe('Monday')
+            ->and($array['startTime'])->toBe('19:30')
+            ->and($array)->not->toHaveKey('raw');
+    });
 
-    #[Test]
-    public function jsonSerialize_matches_toArray(): void
-    {
-        $listing = GroupListing::fromArray($this->sampleData());
+    it('matches toArray when JSON-serialised', function () {
+        $listing = GroupListing::fromArray(sampleListingData());
 
-        $this->assertSame($listing->toArray(), $listing->jsonSerialize());
-    }
+        expect($listing->jsonSerialize())->toBe($listing->toArray());
+    });
 
-    #[Test]
-    public function toString_returns_group_name(): void
-    {
-        $listing = GroupListing::fromArray($this->sampleData());
+    it('casts to the group name as a string', function () {
+        $listing = GroupListing::fromArray(sampleListingData());
 
-        $this->assertSame('SERENITY', (string) $listing);
-    }
+        expect((string) $listing)->toBe('SERENITY');
+    });
+});
 
-    // ── Sorting ─────────────────────────────────────────────────────
-    #[Test]
-    public function sort_by_day_orders_monday_through_sunday(): void
-    {
+// ── Sorting ─────────────────────────────────────────────────────
+describe('sort', function () {
+    it('orders by day from Monday through Sunday', function () {
         $groups = [
-            GroupListing::fromArray($this->sampleData(['day' => 'Friday', 'groupName' => 'F'])),
-            GroupListing::fromArray($this->sampleData(['day' => 'Monday', 'groupName' => 'M'])),
-            GroupListing::fromArray($this->sampleData(['day' => 'Wednesday', 'groupName' => 'W'])),
+            GroupListing::fromArray(sampleListingData(['day' => 'Friday', 'groupName' => 'F'])),
+            GroupListing::fromArray(sampleListingData(['day' => 'Monday', 'groupName' => 'M'])),
+            GroupListing::fromArray(sampleListingData(['day' => 'Wednesday', 'groupName' => 'W'])),
         ];
 
         GroupListing::sort($groups, 'day');
 
-        $this->assertSame('M', $groups[0]->getGroupName());
-        $this->assertSame('W', $groups[1]->getGroupName());
-        $this->assertSame('F', $groups[2]->getGroupName());
-    }
+        expect($groups[0]->getGroupName())->toBe('M')
+            ->and($groups[1]->getGroupName())->toBe('W')
+            ->and($groups[2]->getGroupName())->toBe('F');
+    });
 
-    #[Test]
-    public function sort_by_time_orders_chronologically(): void
-    {
+    it('orders by time chronologically', function () {
         $groups = [
-            GroupListing::fromArray($this->sampleData(['startTime' => '20:00', 'groupName' => 'Late'])),
-            GroupListing::fromArray($this->sampleData(['startTime' => '10:00', 'groupName' => 'Early'])),
-            GroupListing::fromArray($this->sampleData(['startTime' => '14:00', 'groupName' => 'Mid'])),
+            GroupListing::fromArray(sampleListingData(['startTime' => '20:00', 'groupName' => 'Late'])),
+            GroupListing::fromArray(sampleListingData(['startTime' => '10:00', 'groupName' => 'Early'])),
+            GroupListing::fromArray(sampleListingData(['startTime' => '14:00', 'groupName' => 'Mid'])),
         ];
 
         GroupListing::sort($groups, 'time');
 
-        $this->assertSame('Early', $groups[0]->getGroupName());
-        $this->assertSame('Mid', $groups[1]->getGroupName());
-        $this->assertSame('Late', $groups[2]->getGroupName());
-    }
+        expect($groups[0]->getGroupName())->toBe('Early')
+            ->and($groups[1]->getGroupName())->toBe('Mid')
+            ->and($groups[2]->getGroupName())->toBe('Late');
+    });
 
-    #[Test]
-    public function sort_by_name_orders_alphabetically(): void
-    {
+    it('orders by name alphabetically', function () {
         $groups = [
-            GroupListing::fromArray($this->sampleData(['groupName' => 'Zebra'])),
-            GroupListing::fromArray($this->sampleData(['groupName' => 'Alpha'])),
-            GroupListing::fromArray($this->sampleData(['groupName' => 'Middle'])),
+            GroupListing::fromArray(sampleListingData(['groupName' => 'Zebra'])),
+            GroupListing::fromArray(sampleListingData(['groupName' => 'Alpha'])),
+            GroupListing::fromArray(sampleListingData(['groupName' => 'Middle'])),
         ];
 
         GroupListing::sort($groups, 'name');
 
-        $this->assertSame('Alpha', $groups[0]->getGroupName());
-        $this->assertSame('Middle', $groups[1]->getGroupName());
-        $this->assertSame('Zebra', $groups[2]->getGroupName());
-    }
+        expect($groups[0]->getGroupName())->toBe('Alpha')
+            ->and($groups[1]->getGroupName())->toBe('Middle')
+            ->and($groups[2]->getGroupName())->toBe('Zebra');
+    });
 
-    #[Test]
-    public function sort_by_day_then_time(): void
-    {
+    it('orders by day then time', function () {
         $groups = [
-            GroupListing::fromArray($this->sampleData(['day' => 'Tuesday', 'startTime' => '20:00', 'groupName' => 'Tue-Late'])),
-            GroupListing::fromArray($this->sampleData(['day' => 'Monday', 'startTime' => '19:00', 'groupName' => 'Mon-Eve'])),
-            GroupListing::fromArray($this->sampleData(['day' => 'Tuesday', 'startTime' => '10:00', 'groupName' => 'Tue-Morn'])),
+            GroupListing::fromArray(sampleListingData(['day' => 'Tuesday', 'startTime' => '20:00', 'groupName' => 'Tue-Late'])),
+            GroupListing::fromArray(sampleListingData(['day' => 'Monday', 'startTime' => '19:00', 'groupName' => 'Mon-Eve'])),
+            GroupListing::fromArray(sampleListingData(['day' => 'Tuesday', 'startTime' => '10:00', 'groupName' => 'Tue-Morn'])),
         ];
 
         GroupListing::sort($groups, 'day,time');
 
-        $this->assertSame('Mon-Eve', $groups[0]->getGroupName());
-        $this->assertSame('Tue-Morn', $groups[1]->getGroupName());
-        $this->assertSame('Tue-Late', $groups[2]->getGroupName());
-    }
+        expect($groups[0]->getGroupName())->toBe('Mon-Eve')
+            ->and($groups[1]->getGroupName())->toBe('Tue-Morn')
+            ->and($groups[2]->getGroupName())->toBe('Tue-Late');
+    });
 
-    #[Test]
-    public function sort_handles_unknown_day_gracefully(): void
-    {
+    it('handles an unknown day gracefully', function () {
         $groups = [
-            GroupListing::fromArray($this->sampleData(['day' => 'Funday', 'groupName' => 'Unknown'])),
-            GroupListing::fromArray($this->sampleData(['day' => 'Monday', 'groupName' => 'Known'])),
+            GroupListing::fromArray(sampleListingData(['day' => 'Funday', 'groupName' => 'Unknown'])),
+            GroupListing::fromArray(sampleListingData(['day' => 'Monday', 'groupName' => 'Known'])),
         ];
 
         GroupListing::sort($groups, 'day');
 
-        $this->assertSame('Known', $groups[0]->getGroupName());
-        $this->assertSame('Unknown', $groups[1]->getGroupName());
-    }
+        expect($groups[0]->getGroupName())->toBe('Known')
+            ->and($groups[1]->getGroupName())->toBe('Unknown');
+    });
 
-    #[Test]
-    public function sort_with_unknown_field_preserves_order(): void
-    {
+    it('keeps every element for an unknown sort field', function () {
         $groups = [
-            GroupListing::fromArray($this->sampleData(['groupName' => 'B'])),
-            GroupListing::fromArray($this->sampleData(['groupName' => 'A'])),
+            GroupListing::fromArray(sampleListingData(['groupName' => 'B'])),
+            GroupListing::fromArray(sampleListingData(['groupName' => 'A'])),
         ];
 
         GroupListing::sort($groups, 'nonexistent');
@@ -338,7 +297,7 @@ class GroupListingTest extends TestCase
         // Unknown sort field returns 0 — PHP's usort is not guaranteed stable,
         // but it should not crash. Just verify both elements survive.
         $names = array_map(fn($g) => $g->getGroupName(), $groups);
-        $this->assertContains('A', $names);
-        $this->assertContains('B', $names);
-    }
-}
+        expect($names)->toContain('A')
+            ->toContain('B');
+    });
+});
