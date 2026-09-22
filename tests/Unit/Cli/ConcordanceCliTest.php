@@ -4,169 +4,146 @@ declare(strict_types=1);
 
 namespace Concordance\Tests\Unit\Cli;
 
-use PHPUnit\Framework\Attributes\CoversClass;
-use Concordance\Common\Encryption;
-use PHPUnit\Framework\MockObject\MockObject;
+use BleedingDeacons\WpMocks\WpState;
 use Concordance\Api\ApiCache;
 use Concordance\Api\ApiClient;
 use Concordance\Cli\ConcordanceCli;
+use Concordance\Common\Encryption;
 use ConcordanceCliExit;
-use BleedingDeacons\WpMocks\TestCase;
-use BleedingDeacons\WpMocks\WpState;
 use WP_Error;
 
-#[CoversClass(\Concordance\Cli\ConcordanceCli::class)]
-class ConcordanceCliTest extends TestCase
+/*
+ * Tests for the `wp concordance` command, against the WP-CLI stand-ins in
+ * tests/wp-stubs.php, which record what was logged and formatted.
+ */
+
+covers(\Concordance\Cli\ConcordanceCli::class);
+
+/**
+ * @return array<int, array<string, mixed>>
+ */
+function cliSampleGroups(): array
 {
-    /** @var ApiClient&MockObject */
-    private $client;
-    /** @var ApiCache&MockObject */
-    private $cache;
-    private ConcordanceCli $cli;
+    return [
+        ['id' => 1, 'groupName' => 'Alpha', 'intergroupId' => 1, 'day' => 'Monday'],
+        ['id' => 2, 'groupName' => 'Beta', 'intergroupId' => 2, 'day' => 'Tuesday'],
+    ];
+}
 
-    protected function setUp(): void
-    {
-        parent::setUp();
-        // The WP-CLI log and formatter are local stubs, so they reset here;
-        // parent::setUp() has already cleared the options in WpState.
-        $GLOBALS['conc_cli_log'] = [];
-        $GLOBALS['conc_cli_formatted'] = null;
-        $this->client = $this->createMock(ApiClient::class);
-        $this->cache = $this->createMock(ApiCache::class);
-        $this->cli = new ConcordanceCli($this->client, $this->cache);
-    }
+beforeEach(function () {
+    // The WP-CLI log and formatter are local stubs, so they reset here;
+    // the TestCase's setUp() has already cleared the options in WpState.
+    $GLOBALS['conc_cli_log'] = [];
+    $GLOBALS['conc_cli_formatted'] = null;
+    $this->client = $this->createMock(ApiClient::class);
+    $this->cache = $this->createMock(ApiCache::class);
+    $this->cli = new ConcordanceCli($this->client, $this->cache);
+});
 
-    private function sampleGroups(): array
-    {
-        return [
-            ['id' => 1, 'groupName' => 'Alpha', 'intergroupId' => 1, 'day' => 'Monday'],
-            ['id' => 2, 'groupName' => 'Beta', 'intergroupId' => 2, 'day' => 'Tuesday'],
-        ];
-    }
-
-    // ── list ─────────────────────────────────────────────────────────────
-
-    public function testListGroupsFromCacheAndFormats(): void
-    {
-        $this->cache->method('getGroups')->willReturn($this->sampleGroups());
+// ── list ─────────────────────────────────────────────────────────────
+describe('list', function () {
+    it('lists groups from the cache and formats them', function () {
+        $this->cache->method('getGroups')->willReturn(cliSampleGroups());
         $this->cli->list_groups([], []);
-        $this->assertNotNull($GLOBALS['conc_cli_formatted']);
-        $this->assertCount(2, $GLOBALS['conc_cli_formatted']['items']);
-    }
+        expect($GLOBALS['conc_cli_formatted'])->not->toBeNull()
+            ->and($GLOBALS['conc_cli_formatted']['items'])->toHaveCount(2);
+    });
 
-    public function testListGroupsNoCacheUsesClient(): void
-    {
-        $this->client->expects($this->once())->method('getGroups')->willReturn($this->sampleGroups());
+    it('uses the client directly with --no-cache', function () {
+        $this->client->expects($this->once())->method('getGroups')->willReturn(cliSampleGroups());
         $this->cli->list_groups([], ['no-cache' => true]);
-        $this->assertNotNull($GLOBALS['conc_cli_formatted']);
-    }
+        expect($GLOBALS['conc_cli_formatted'])->not->toBeNull();
+    });
 
-    public function testListGroupsErrorsOnWpError(): void
-    {
+    it('errors on a WP_Error', function () {
         $this->cache->method('getGroups')->willReturn(new WP_Error('e', 'failed'));
-        $this->expectException(ConcordanceCliExit::class);
         $this->cli->list_groups([], []);
-    }
+    })->throws(ConcordanceCliExit::class);
 
-    public function testListGroupsWarnsWhenEmpty(): void
-    {
+    it('warns when there are no groups', function () {
         $this->cache->method('getGroups')->willReturn([]);
         $this->cli->list_groups([], []);
-        $this->assertSame('warning', $GLOBALS['conc_cli_log'][0][0]);
-    }
+        expect($GLOBALS['conc_cli_log'][0][0])->toBe('warning');
+    });
 
-    public function testListGroupsFiltersByIntergroupSortsAndLimits(): void
-    {
-        $this->cache->method('getGroups')->willReturn($this->sampleGroups());
+    it('filters by intergroup, sorts and limits', function () {
+        $this->cache->method('getGroups')->willReturn(cliSampleGroups());
         $this->cli->list_groups([], ['intergroup' => 1, 'sort' => 'day', 'limit' => 5]);
-        $this->assertCount(1, $GLOBALS['conc_cli_formatted']['items']);
-    }
+        expect($GLOBALS['conc_cli_formatted']['items'])->toHaveCount(1);
+    });
 
-    public function testListGroupsWarnsWhenIntergroupFilterEmpties(): void
-    {
-        $this->cache->method('getGroups')->willReturn($this->sampleGroups());
+    it('warns when the intergroup filter leaves nothing', function () {
+        $this->cache->method('getGroups')->willReturn(cliSampleGroups());
         $this->cli->list_groups([], ['intergroup' => 999]);
-        $this->assertSame('warning', $GLOBALS['conc_cli_log'][0][0]);
-    }
+        expect($GLOBALS['conc_cli_log'][0][0])->toBe('warning');
+    });
+});
 
-    // ── get ──────────────────────────────────────────────────────────────
-
-    public function testGetErrorsWithoutId(): void
-    {
-        $this->expectException(ConcordanceCliExit::class);
+// ── get ──────────────────────────────────────────────────────────────
+describe('get', function () {
+    it('errors without an id', function () {
         $this->cli->get([], []);
-    }
+    })->throws(ConcordanceCliExit::class);
 
-    public function testGetErrorsOnWpError(): void
-    {
+    it('errors on a WP_Error', function () {
         $this->client->method('getGroup')->willReturn(new WP_Error('e', 'bad'));
-        $this->expectException(ConcordanceCliExit::class);
         $this->cli->get(['42'], []);
-    }
+    })->throws(ConcordanceCliExit::class);
 
-    public function testGetWarnsWhenNotFound(): void
-    {
+    it('warns when the group is not found', function () {
         $this->client->method('getGroup')->willReturn([]);
         $this->cli->get(['42'], []);
-        $this->assertSame('warning', $GLOBALS['conc_cli_log'][0][0]);
-    }
+        expect($GLOBALS['conc_cli_log'][0][0])->toBe('warning');
+    });
 
-    public function testGetFormatsSingleGroup(): void
-    {
+    it('formats a single group', function () {
         $this->client->method('getGroup')->willReturn(['id' => 42, 'groupName' => 'Gamma']);
         $this->cli->get(['42'], ['format' => 'json']);
-        $this->assertSame('json', $GLOBALS['conc_cli_formatted']['format']);
-    }
+        expect($GLOBALS['conc_cli_formatted']['format'])->toBe('json');
+    });
+});
 
-    // ── test / flush / config / version ──────────────────────────────────
-
-    public function testTestReportsSuccess(): void
-    {
-        $this->client->method('getGroups')->willReturn($this->sampleGroups());
+// ── test / flush / config / version ──────────────────────────────────
+describe('test, flush, config and version', function () {
+    it('reports success from test', function () {
+        $this->client->method('getGroups')->willReturn(cliSampleGroups());
         $this->cli->test([], []);
         $kinds = array_column($GLOBALS['conc_cli_log'], 0);
-        $this->assertContains('success', $kinds);
-    }
+        expect($kinds)->toContain('success');
+    });
 
-    public function testTestErrorsOnFailure(): void
-    {
+    it('errors from test on failure', function () {
         $this->client->method('getGroups')->willReturn(new WP_Error('e', 'down'));
-        $this->expectException(ConcordanceCliExit::class);
         $this->cli->test([], []);
-    }
+    })->throws(ConcordanceCliExit::class);
 
-    public function testFlushCacheReportsSuccess(): void
-    {
+    it('reports success from flush_cache', function () {
         $this->cache->method('flush')->willReturn(true);
         $this->cli->flush_cache([], []);
-        $this->assertSame('success', $GLOBALS['conc_cli_log'][0][0]);
-    }
+        expect($GLOBALS['conc_cli_log'][0][0])->toBe('success');
+    });
 
-    public function testFlushCacheWarnsWhenTheVersionCouldNotBeWritten(): void
-    {
+    it('warns from flush_cache when the version could not be written', function () {
         $this->cache->method('flush')->willReturn(false);
         $this->cli->flush_cache([], []);
-        $this->assertSame('warning', $GLOBALS['conc_cli_log'][0][0]);
-    }
+        expect($GLOBALS['conc_cli_log'][0][0])->toBe('warning');
+    });
 
-    public function testConfigFormatsSettings(): void
-    {
+    it('formats the settings from config', function () {
         WpState::$options['concordance_api_key'] = (new Encryption())->encrypt('abcdefghijklmnop');
         $this->cli->config([], []);
-        $this->assertNotNull($GLOBALS['conc_cli_formatted']);
+        expect($GLOBALS['conc_cli_formatted'])->not->toBeNull();
         $settings = array_column($GLOBALS['conc_cli_formatted']['items'], 'Setting');
-        $this->assertContains('API Key', $settings);
-    }
+        expect($settings)->toContain('API Key');
+    });
 
-    public function testConfigWithNoApiKey(): void
-    {
+    it('formats config with no API key', function () {
         $this->cli->config([], []);
-        $this->assertNotNull($GLOBALS['conc_cli_formatted']);
-    }
+        expect($GLOBALS['conc_cli_formatted'])->not->toBeNull();
+    });
 
-    public function testVersionLogs(): void
-    {
+    it('logs the version', function () {
         $this->cli->version([], []);
-        $this->assertSame('log', $GLOBALS['conc_cli_log'][0][0]);
-    }
-}
+        expect($GLOBALS['conc_cli_log'][0][0])->toBe('log');
+    });
+});

@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace Concordance\Tests\Unit\Common;
 
-use BleedingDeacons\WpMocks\TestCase;
 use Concordance\Common\UserAgent;
 
-/**
+/*
  * Unit tests for {@see UserAgent}.
  *
  * The shape asserted here is the one an upstream's bot protection was
@@ -16,51 +15,35 @@ use Concordance\Common\UserAgent;
  * from the wp-mocks WordPress stub group and answers
  * https://example.test/.
  */
-final class UserAgentTest extends TestCase
-{
-    public function test_the_plugin_identifies_itself_with_name_version_contact_and_site(): void
-    {
-        self::assertSame(
-            'Concordance/1.0.0 (rest@aa-bristol.org; https://example.test)',
-            UserAgent::plugin(),
-        );
-    }
 
-    public function test_it_builds_the_documented_shape_for_any_app(): void
-    {
-        self::assertSame(
-            'Widget/1.2.3 (rest@aa-bristol.org; https://example.test)',
-            UserAgent::forApp('Widget', '1.2.3'),
-        );
-    }
+it('identifies the plugin with name, version, contact and site', function () {
+    expect(UserAgent::plugin())
+        ->toBe('Concordance/1.0.0 (rest@aa-bristol.org; https://example.test)');
+});
 
-    public function test_a_missing_version_leaves_out_the_slash(): void
-    {
-        // Better a product with no version than "Widget/" or an invented one.
-        self::assertSame(
-            'Widget (rest@aa-bristol.org; https://example.test)',
-            UserAgent::forApp('Widget'),
-        );
-    }
+it('builds the documented shape for any app', function () {
+    expect(UserAgent::forApp('Widget', '1.2.3'))
+        ->toBe('Widget/1.2.3 (rest@aa-bristol.org; https://example.test)');
+});
 
-    public function test_an_empty_app_name_falls_back_to_the_plugin(): void
-    {
-        self::assertStringStartsWith('Concordance/1.0', UserAgent::forApp('', '1.0'));
-    }
+it('leaves out the slash when the version is missing', function () {
+    // Better a product with no version than "Widget/" or an invented one.
+    expect(UserAgent::forApp('Widget'))
+        ->toBe('Widget (rest@aa-bristol.org; https://example.test)');
+});
 
-    public function test_header_breaking_characters_are_stripped(): void
-    {
-        // A newline here would be header injection; a bracket or
-        // semicolon would close the comment early and leave the
-        // contact details dangling outside it.
-        self::assertSame(
-            'Widget/1.2.3 evil (rest@aa-bristol.org; https://example.test)',
-            UserAgent::forApp('Widget', "1.2.3\r\n(evil);"),
-        );
-    }
+it('falls back to the plugin for an empty app name', function () {
+    expect(UserAgent::forApp('', '1.0'))->toStartWith('Concordance/1.0');
+});
 
-    public function test_the_contact_is_the_role_address(): void
-    {
-        self::assertSame('rest@aa-bristol.org', UserAgent::CONTACT);
-    }
-}
+it('strips header-breaking characters', function () {
+    // A newline here would be header injection; a bracket or
+    // semicolon would close the comment early and leave the
+    // contact details dangling outside it.
+    expect(UserAgent::forApp('Widget', "1.2.3\r\n(evil);"))
+        ->toBe('Widget/1.2.3 evil (rest@aa-bristol.org; https://example.test)');
+});
+
+it('uses the role address as the contact', function () {
+    expect(UserAgent::CONTACT)->toBe('rest@aa-bristol.org');
+});

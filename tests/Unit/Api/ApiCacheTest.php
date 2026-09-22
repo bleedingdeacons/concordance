@@ -4,164 +4,149 @@ declare(strict_types=1);
 
 namespace Concordance\Tests\Unit\Api;
 
-use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\MockObject\MockObject;
-use BleedingDeacons\WpMocks\Doubles\FakeWpdb;
-use BleedingDeacons\WpMocks\TestCase;
 use BleedingDeacons\WpMocks\WpState;
 use Concordance\Api\ApiCache;
 use Concordance\Api\ApiClient;
 use WP_Error;
 
-#[CoversClass(\Concordance\Api\ApiCache::class)]
-class ApiCacheTest extends TestCase
-{
-    /** @var ApiClient&MockObject */
-    private $client;
-    private ApiCache $cache;
+/*
+ * Tests for ApiCache: the transient-backed cache in front of ApiClient, and
+ * the generation counter that makes a flush work under any object cache.
+ */
 
-    private FakeWpdb $wpdb;
+covers(\Concordance\Api\ApiCache::class);
 
-    protected function setUp(): void
-    {
-        parent::setUp();
-        // parent::setUp() clears WpState, so options and transients start empty.
-        $this->wpdb = $GLOBALS['wpdb'];
-        $this->wpdb->reset();
-        $this->client = $this->createMock(ApiClient::class);
-        $this->cache = new ApiCache($this->client);
-    }
+beforeEach(function () {
+    // The TestCase's setUp() clears WpState, so options and transients start empty.
+    $this->wpdb = $GLOBALS['wpdb'];
+    $this->wpdb->reset();
+    $this->client = $this->createMock(ApiClient::class);
+    $this->cache = new ApiCache($this->client);
+});
 
-    public function testGetGroupsBypassesCacheWhenTtlZero(): void
-    {
+describe('getGroups', function () {
+    it('bypasses the cache when the TTL is zero', function () {
         $this->client->method('getGroups')->willReturn([['a' => 1]]);
         $result = $this->cache->getGroups([], 0);
-        $this->assertSame([['a' => 1]], $result);
-        $this->assertSame([], WpState::$transients); // nothing cached
-    }
+        expect($result)->toBe([['a' => 1]])
+            ->and(WpState::$transients)->toBe([]); // nothing cached
+    });
 
-    public function testGetGroupsStoresAndServesFromCache(): void
-    {
+    it('stores a response and serves it from the cache', function () {
         $this->client->expects($this->once())->method('getGroups')->willReturn([['a' => 1]]);
 
         // First call: miss → fetch → store.
         $first = $this->cache->getGroups(['page' => 1], 600);
-        $this->assertSame([['a' => 1]], $first);
-        $this->assertNotSame([], WpState::$transients);
+        expect($first)->toBe([['a' => 1]])
+            ->and(WpState::$transients)->not->toBe([]);
 
         // Second call: hit → no second client call (expects once).
         $second = $this->cache->getGroups(['page' => 1], 600);
-        $this->assertSame([['a' => 1]], $second);
-    }
+        expect($second)->toBe([['a' => 1]]);
+    });
 
-    public function testGetGroupsDoesNotCacheWpError(): void
-    {
+    it('does not cache a WP_Error', function () {
         $this->client->method('getGroups')->willReturn(new WP_Error('e', 'm'));
         $result = $this->cache->getGroups([], 600);
-        $this->assertInstanceOf(WP_Error::class, $result);
-        $this->assertSame([], WpState::$transients);
-    }
+        expect($result)->toBeInstanceOf(WP_Error::class)
+            ->and(WpState::$transients)->toBe([]);
+    });
 
-    public function testGetGroupsUsesStoredTtlOptionByDefault(): void
-    {
+    it('uses the stored TTL option by default', function () {
         WpState::$options['concordance_cache_ttl'] = 0; // disables caching
         $this->client->method('getGroups')->willReturn([['x' => 1]]);
         $this->cache->getGroups();
-        $this->assertSame([], WpState::$transients);
-    }
+        expect(WpState::$transients)->toBe([]);
+    });
 
-    public function testGetGroupCachesAndServes(): void
-    {
+    it('wraps an unexpected exception', function () {
+        $this->client->method('getGroups')->willThrowException(new \RuntimeException('boom'));
+        $result = $this->cache->getGroups([], 600);
+        expect($result)->toBeInstanceOf(WP_Error::class)
+            ->and($result->get_error_code())->toBe('concordance_cache_error');
+    });
+});
+
+describe('getGroup', function () {
+    it('caches a response and serves it', function () {
         $this->client->expects($this->once())->method('getGroup')->with('42')->willReturn(['id' => 42]);
 
-        $this->assertSame(['id' => 42], $this->cache->getGroup('42', 600));
-        $this->assertSame(['id' => 42], $this->cache->getGroup('42', 600)); // cache hit
-    }
+        expect($this->cache->getGroup('42', 600))->toBe(['id' => 42])
+            ->and($this->cache->getGroup('42', 600))->toBe(['id' => 42]); // cache hit
+    });
 
-    public function testGetGroupBypassesCacheWhenTtlZero(): void
-    {
+    it('bypasses the cache when the TTL is zero', function () {
         $this->client->method('getGroup')->willReturn(['id' => 9]);
-        $this->assertSame(['id' => 9], $this->cache->getGroup(9, 0));
-    }
+        expect($this->cache->getGroup(9, 0))->toBe(['id' => 9]);
+    });
 
-    public function testGetGroupDoesNotCacheWpError(): void
-    {
+    it('does not cache a WP_Error', function () {
         $this->client->method('getGroup')->willReturn(new WP_Error('e', 'm'));
-        $this->assertInstanceOf(WP_Error::class, $this->cache->getGroup(9, 600));
-        $this->assertSame([], WpState::$transients);
-    }
+        expect($this->cache->getGroup(9, 600))->toBeInstanceOf(WP_Error::class)
+            ->and(WpState::$transients)->toBe([]);
+    });
 
-    public function testFlushAdvancesTheCacheGeneration(): void
-    {
-        $this->assertTrue($this->cache->flush());
-        $this->assertSame(2, WpState::$options['concordance_cache_version']);
+    it('wraps an unexpected exception', function () {
+        $this->client->method('getGroup')->willThrowException(new \RuntimeException('boom'));
+        $result = $this->cache->getGroup(9, 600);
+        expect($result)->toBeInstanceOf(WP_Error::class)
+            ->and($result->get_error_code())->toBe('concordance_cache_error');
+    });
+});
 
-        $this->assertTrue($this->cache->flush());
-        $this->assertSame(3, WpState::$options['concordance_cache_version']);
-    }
+describe('flush', function () {
+    it('advances the cache generation', function () {
+        expect($this->cache->flush())->toBeTrue()
+            ->and(WpState::$options['concordance_cache_version'])->toBe(2);
 
-    public function testFlushTouchesNoDatabaseRows(): void
-    {
+        expect($this->cache->flush())->toBeTrue()
+            ->and(WpState::$options['concordance_cache_version'])->toBe(3);
+    });
+
+    it('touches no database rows', function () {
         $this->cache->flush();
 
         // It used to DELETE the transient rows straight out of wp_options,
         // which cleared nothing once a persistent object cache moved
         // transients out of the database -- and reported success while doing
         // it.
-        $this->assertSame([], $this->wpdb->queries);
-    }
+        expect($this->wpdb->queries)->toBe([]);
+    });
 
-    public function testAFlushedEntryIsNotServedAgain(): void
-    {
+    it('does not serve a flushed entry again', function () {
         $this->client->expects($this->exactly(2))->method('getGroup')->with('42')->willReturn(['id' => 42]);
 
-        $this->assertSame(['id' => 42], $this->cache->getGroup('42', 600));
-        $this->assertSame(['id' => 42], $this->cache->getGroup('42', 600)); // served from cache
+        expect($this->cache->getGroup('42', 600))->toBe(['id' => 42])
+            ->and($this->cache->getGroup('42', 600))->toBe(['id' => 42]); // served from cache
 
         $this->cache->flush();
 
         // The entry is still in the transient store, and unreachable: the key
         // it was written under belongs to the previous generation.
-        $this->assertNotEmpty(WpState::$transients);
-        $this->assertSame(['id' => 42], $this->cache->getGroup('42', 600));
-    }
+        expect(WpState::$transients)->not->toBeEmpty()
+            ->and($this->cache->getGroup('42', 600))->toBe(['id' => 42]);
+    });
+});
 
-    public function testKeysCarryTheGeneration(): void
-    {
+describe('cache keys', function () {
+    it('puts the generation in every key', function () {
         WpState::$options['concordance_cache_version'] = 7;
         $this->client->method('getGroup')->willReturn(['id' => 1]);
 
         $this->cache->getGroup('1', 600);
 
         $keys = array_keys(WpState::$transients);
-        $this->assertCount(1, $keys);
-        $this->assertStringStartsWith('concordance_v7_group_', $keys[0]);
-    }
+        expect($keys)->toHaveCount(1)
+            ->and($keys[0])->toStartWith('concordance_v7_group_');
+    });
 
-    public function testAMangledGenerationOptionReadsAsTheFirst(): void
-    {
+    it('reads a mangled generation option as the first generation', function () {
         WpState::$options['concordance_cache_version'] = 'nonsense';
         $this->client->method('getGroup')->willReturn(['id' => 1]);
 
         $this->cache->getGroup('1', 600);
 
         $keys = array_keys(WpState::$transients);
-        $this->assertStringStartsWith('concordance_v1_group_', $keys[0]);
-    }
-
-    public function testGetGroupsWrapsAnUnexpectedException(): void
-    {
-        $this->client->method('getGroups')->willThrowException(new \RuntimeException('boom'));
-        $result = $this->cache->getGroups([], 600);
-        $this->assertInstanceOf(WP_Error::class, $result);
-        $this->assertSame('concordance_cache_error', $result->get_error_code());
-    }
-
-    public function testGetGroupWrapsAnUnexpectedException(): void
-    {
-        $this->client->method('getGroup')->willThrowException(new \RuntimeException('boom'));
-        $result = $this->cache->getGroup(9, 600);
-        $this->assertInstanceOf(WP_Error::class, $result);
-        $this->assertSame('concordance_cache_error', $result->get_error_code());
-    }
-}
+        expect($keys[0])->toStartWith('concordance_v1_group_');
+    });
+});

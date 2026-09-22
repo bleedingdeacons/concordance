@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * PHPUnit Bootstrap File for Concordance
+ * Test bootstrap for Concordance (Pest, on PHPUnit)
  *
  * WordPress stand-ins come from bleedingdeacons/wp-mocks, shared across the
  * plugin suite. Its bootstrap loads Patchwork before anything patchable, so
@@ -21,6 +21,16 @@ declare(strict_types=1);
 use BleedingDeacons\WpMocks\Bootstrap;
 use BleedingDeacons\WpMocks\Doubles\FakeWpdb;
 use BleedingDeacons\WpMocks\WpState;
+
+// Pest's launcher does not define PHPUNIT_COMPOSER_INSTALL, which
+// vendor/bin/phpunit does and PHPUnit's separate-process template reads to
+// load Composer in the child. Without it the child has no autoloader at all,
+// and every #[RunInSeparateProcess] test dies before it starts — which is
+// what the WP_CLI test in Unit/PluginWpCliTest.php needs, since a defined
+// constant cannot be undone.
+if (!defined('PHPUNIT_COMPOSER_INSTALL')) {
+    define('PHPUNIT_COMPOSER_INSTALL', dirname(__DIR__) . '/vendor/autoload.php');
+}
 
 require_once __DIR__ . '/../vendor/autoload.php';
 

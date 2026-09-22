@@ -4,13 +4,8 @@ declare(strict_types=1);
 
 namespace Concordance\Tests\Unit\Admin;
 
-use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\Test;
-use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\MockObject\MockObject;
-use function Brain\Monkey\Functions\when;
-use BleedingDeacons\WpMocks\TestCase;
 use BleedingDeacons\WpMocks\WpState;
+use Brain\Monkey\Functions;
 use Concordance\Admin\SettingsAdmin;
 use Concordance\Api\ApiCache;
 use Concordance\Api\ApiClient;
@@ -20,7 +15,7 @@ use ReflectionMethod;
 use RuntimeException;
 use WP_Error;
 
-/**
+/*
  * Tests for the Concordance settings screen.
  *
  * src/Admin was excluded from the coverage source set until now, on the
@@ -48,98 +43,124 @@ use WP_Error;
  * Nothing here touches the network: ApiClient and ApiCache are both doubles,
  * and no real credential is ever stored or printed.
  */
-#[CoversClass(\Concordance\Admin\SettingsAdmin::class)]
-class SettingsAdminTest extends TestCase
+
+covers(\Concordance\Admin\SettingsAdmin::class);
+
+// The record extractFirstRawResult() should find, whatever wraps it.
+const FIRST_RAW_RECORD = ['id' => 1, 'groupName' => 'First'];
+
+/** Mark the current request as a nonce-verified connection test. */
+function requestConnectionTest(): void
 {
-    /** @var ApiClient&MockObject */
-    private $client;
+    $_GET['concordance_test'] = '1';
+    $_GET['_wpnonce']         = 'nonce-concordance_test_nonce';
+}
 
-    /** @var ApiCache&MockObject */
-    private $cache;
+/** @return array<string, string> */
+function validFlushRequest(): array
+{
+    return [
+        'concordance_flush_cache' => '1',
+        '_wpnonce'                => 'nonce-concordance_flush_cache_nonce',
+    ];
+}
 
-    private SettingsAdmin $admin;
+function resolveFlush(SettingsAdmin $admin): ?string
+{
+    $method = new ReflectionMethod(SettingsAdmin::class, 'resolveCacheFlushRedirect');
 
-    /**
-     * Settings API calls captured from registerSettings().
-     *
-     * @var array<string, array{group: string, args: array<string, mixed>}>
-     */
-    private array $settings = [];
+    /** @var string|null $target */
+    $target = $method->invoke($admin);
 
-    /** @var array<int, array{id: string, page: string}> */
-    private array $sections = [];
+    return $target;
+}
 
-    /** @var array<int, array{id: string, page: string, section: string, callback: mixed}> */
-    private array $fields = [];
+/**
+ * A three-group API response spanning two intergroups, with the
+ * alphabetically later intergroup first so sorting is observable.
+ *
+ * @return array<int, array<string, mixed>>
+ */
+function settingsGroupsResponse(): array
+{
+    return [
+        [
+            'id' => 1, 'groupName' => 'Monday Nooners', 'town' => 'BRISTOL',
+            'intergroupId' => 9, 'intergroupName' => 'CORNWALL',
+            'day' => 'Monday', 'startTime' => '12:00', 'endTime' => '13:00',
+        ],
+        [
+            'id' => 2, 'groupName' => 'Tuesday Steps', 'town' => 'BATH',
+            'intergroupId' => 7, 'intergroupName' => 'BRISTOL',
+            'day' => 'Tuesday', 'startTime' => '19:30', 'endTime' => '21:00',
+        ],
+        [
+            'id' => 3, 'groupName' => 'Wednesday Big Book', 'town' => 'WELLS',
+            'intergroupId' => 7, 'intergroupName' => 'BRISTOL',
+            'day' => 'Wednesday', 'startTime' => '18:00', 'endTime' => '19:30',
+        ],
+    ];
+}
 
-    protected function setUp(): void
-    {
-        parent::setUp();
+beforeEach(function () {
+    $_GET = [];
 
-        $_GET = [];
+    // Settings API calls captured from registerSettings().
+    $this->settings = [];
+    $this->sections = [];
+    $this->fields   = [];
 
-        $this->stubSettingsApi();
+    // The Settings API and a handful of admin-page helpers are outside what
+    // wp-mocks stubs, so they are defined here. The three registration
+    // functions record rather than discard, which is what the registration
+    // tests below assert on.
+    Functions\when('register_setting')->alias(
+        function (string $group, string $name, array $args = []): void {
+            $this->settings[$name] = ['group' => $group, 'args' => $args];
+        }
+    );
 
-        $this->client = $this->createMock(ApiClient::class);
-        $this->cache  = $this->createMock(ApiCache::class);
-        $this->admin  = new SettingsAdmin($this->client, new Encryption(), $this->cache);
-    }
-
-    protected function tearDown(): void
-    {
-        $_GET = [];
-
-        parent::tearDown();
-    }
-
-    /**
-     * The Settings API and a handful of admin-page helpers are outside what
-     * wp-mocks stubs, so they are defined here. The three registration
-     * functions record rather than discard, which is what the registration
-     * tests below assert on.
-     */
-    private function stubSettingsApi(): void
-    {
-        when('register_setting')->alias(
-            function (string $group, string $name, array $args = []): void {
-                $this->settings[$name] = ['group' => $group, 'args' => $args];
+    Functions\when('add_settings_section')->alias(
+        function (string $id, string $title, mixed $callback, string $page): void {
+            $this->sections[] = ['id' => $id, 'page' => $page];
+            if (is_callable($callback)) {
+                ob_start();
+                $callback();
+                ob_end_clean();
             }
-        );
+        }
+    );
 
-        when('add_settings_section')->alias(
-            function (string $id, string $title, mixed $callback, string $page): void {
-                $this->sections[] = ['id' => $id, 'page' => $page];
-                if (is_callable($callback)) {
-                    ob_start();
-                    $callback();
-                    ob_end_clean();
-                }
-            }
-        );
+    Functions\when('add_settings_field')->alias(
+        function (string $id, string $title, mixed $callback, string $page, string $section = ''): void {
+            $this->fields[] = [
+                'id' => $id, 'page' => $page, 'section' => $section, 'callback' => $callback,
+            ];
+        }
+    );
 
-        when('add_settings_field')->alias(
-            function (string $id, string $title, mixed $callback, string $page, string $section = ''): void {
-                $this->fields[] = [
-                    'id' => $id, 'page' => $page, 'section' => $section, 'callback' => $callback,
-                ];
-            }
-        );
+    Functions\when('settings_fields')->justReturn(null);
+    Functions\when('do_settings_sections')->justReturn(null);
+    Functions\when('submit_button')->alias(static function (string $text = 'Save'): void {
+        echo '<button type="submit">' . $text . '</button>';
+    });
+    Functions\when('get_admin_page_title')->justReturn('Concordance');
+    Functions\when('wp_nonce_url')->alias(
+        static fn (string $url, string $action = ''): string => $url . '&_wpnonce=nonce-' . $action
+    );
 
-        when('settings_fields')->justReturn(null);
-        when('do_settings_sections')->justReturn(null);
-        when('submit_button')->alias(static function (string $text = 'Save'): void {
-            echo '<button type="submit">' . $text . '</button>';
-        });
-        when('get_admin_page_title')->justReturn('Concordance');
-        when('wp_nonce_url')->alias(
-            static fn (string $url, string $action = ''): string => $url . '&_wpnonce=nonce-' . $action
-        );
-    }
+    $this->client = $this->createMock(ApiClient::class);
+    $this->cache  = $this->createMock(ApiCache::class);
+    $this->admin  = new SettingsAdmin($this->client, new Encryption(), $this->cache);
+});
 
-    // ── registration ──────────────────────────────────────────────────
-    #[Test]
-    public function the_constructor_registers_every_admin_hook(): void
-    {
+afterEach(function () {
+    $_GET = [];
+});
+
+// ── registration ──────────────────────────────────────────────────
+describe('registration', function () {
+    it('registers every admin hook from the constructor', function () {
         foreach (['admin_menu', 'admin_init', 'admin_footer'] as $hook) {
             $this->assertActionAdded($hook, false, 'expected ' . $hook . ' to be hooked');
         }
@@ -148,827 +169,540 @@ class SettingsAdminTest extends TestCase
         // one is not masked by the other.
         $this->assertActionAdded('admin_init', [$this->admin, 'registerSettings']);
         $this->assertActionAdded('admin_init', [$this->admin, 'handleCacheFlush']);
-    }
+    });
 
-    #[Test]
-    public function register_menu_adds_the_top_level_page_and_two_submenus(): void
-    {
+    it('adds the top-level page and two submenus', function () {
         $this->admin->registerMenu();
 
         $slugs = array_column(WpState::$menus, 'slug');
 
-        $this->assertSame(['concordance', 'concordance', 'concordance-docs'], $slugs);
-        $this->assertSame('menu', WpState::$menus[0]['type']);
-        $this->assertSame('submenu', WpState::$menus[1]['type']);
+        expect($slugs)->toBe(['concordance', 'concordance', 'concordance-docs'])
+            ->and(WpState::$menus[0]['type'])->toBe('menu')
+            ->and(WpState::$menus[1]['type'])->toBe('submenu');
 
         foreach (WpState::$menus as $menu) {
-            $this->assertSame('manage_options', $menu['cap'], $menu['slug'] . ' should require manage_options');
+            expect($menu['cap'])->toBe('manage_options', $menu['slug'] . ' should require manage_options');
         }
-    }
+    });
 
-    #[Test]
-    public function register_settings_registers_every_option_in_one_group(): void
-    {
+    it('registers every option in one group', function () {
         $this->admin->registerSettings();
 
-        $this->assertSame([
+        expect(array_keys($this->settings))->toBe([
             ConcordanceConfiguration::OPTION_API_KEY,
             ConcordanceConfiguration::OPTION_CACHE_TTL,
             ConcordanceConfiguration::OPTION_API_BASE_URL,
             ConcordanceConfiguration::OPTION_REQUEST_TIMEOUT,
             ConcordanceConfiguration::OPTION_INTERGROUP_ID,
             ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS,
-        ], array_keys($this->settings));
+        ]);
 
         foreach ($this->settings as $name => $spec) {
-            $this->assertSame('concordance_options', $spec['group'], $name . ' is in the wrong group');
-            $this->assertArrayHasKey('sanitize_callback', $spec['args'], $name . ' has no sanitize callback');
+            expect($spec['group'])->toBe('concordance_options', $name . ' is in the wrong group')
+                ->and($spec['args'])->toHaveKey('sanitize_callback', message: $name . ' has no sanitize callback');
         }
-    }
+    });
 
-    /**
-     * The API key must never be written to wp_options in the clear, so its
-     * sanitize callback is the encryption step rather than a formatting one.
-     */
-    #[Test]
-    public function the_api_key_is_encrypted_by_its_sanitize_callback(): void
-    {
+    // The API key must never be written to wp_options in the clear, so its
+    // sanitize callback is the encryption step rather than a formatting one.
+    it('encrypts the API key through its sanitize callback', function () {
         $this->admin->registerSettings();
 
         $callback = $this->settings[ConcordanceConfiguration::OPTION_API_KEY]['args']['sanitize_callback'];
 
-        $this->assertSame([$this->admin, 'sanitizeAndEncryptApiKey'], $callback);
-    }
+        expect($callback)->toBe([$this->admin, 'sanitizeAndEncryptApiKey']);
+    });
 
-    #[Test]
-    public function register_settings_builds_two_sections_and_six_fields(): void
-    {
+    it('builds two sections and six fields', function () {
         $this->admin->registerSettings();
 
-        $this->assertSame(
-            ['concordance_main_section', 'concordance_dashboard_section'],
-            array_column($this->sections, 'id')
-        );
-
-        $this->assertCount(6, $this->fields);
+        expect(array_column($this->sections, 'id'))
+            ->toBe(['concordance_main_section', 'concordance_dashboard_section'])
+            ->and($this->fields)->toHaveCount(6);
 
         foreach ($this->fields as $field) {
-            $this->assertSame('concordance', $field['page'], $field['id'] . ' is on the wrong page');
-            $this->assertIsCallable($field['callback'], $field['id'] . ' has no render callback');
+            expect($field['page'])->toBe('concordance', $field['id'] . ' is on the wrong page')
+                ->and($field['callback'])->toBeCallable($field['id'] . ' has no render callback');
         }
 
         // The two dashboard-display settings belong to the second section.
         $bySection = array_column($this->fields, 'section', 'id');
-        $this->assertSame(
-            'concordance_dashboard_section',
-            $bySection[ConcordanceConfiguration::OPTION_INTERGROUP_ID]
-        );
-        $this->assertSame(
-            'concordance_dashboard_section',
-            $bySection[ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS]
-        );
-    }
+        expect($bySection[ConcordanceConfiguration::OPTION_INTERGROUP_ID])->toBe('concordance_dashboard_section')
+            ->and($bySection[ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS])->toBe('concordance_dashboard_section');
+    });
+});
 
-    // ── sanitize callbacks ────────────────────────────────────────────
-    #[Test]
-    public function an_empty_api_key_is_stored_as_an_empty_string(): void
-    {
-        $this->assertSame('', $this->admin->sanitizeAndEncryptApiKey(''));
-        $this->assertSame('', $this->admin->sanitizeAndEncryptApiKey(null));
-    }
+// ── sanitize callbacks ────────────────────────────────────────────
+describe('sanitize callbacks', function () {
+    it('stores an empty API key as an empty string', function () {
+        expect($this->admin->sanitizeAndEncryptApiKey(''))->toBe('')
+            ->and($this->admin->sanitizeAndEncryptApiKey(null))->toBe('');
+    });
 
-    #[Test]
-    public function a_new_api_key_is_encrypted_before_storage(): void
-    {
+    it('encrypts a new API key before storage', function () {
         $encryption = new Encryption();
 
         $stored = $this->admin->sanitizeAndEncryptApiKey('plain-text-value');
 
-        $this->assertNotSame('plain-text-value', $stored, 'the key must not be stored in the clear');
-        $this->assertTrue($encryption->isEncrypted($stored));
-        $this->assertSame('plain-text-value', $encryption->decrypt($stored));
-    }
+        expect($stored)->not->toBe('plain-text-value', 'the key must not be stored in the clear')
+            ->and($encryption->isEncrypted($stored))->toBeTrue()
+            ->and($encryption->decrypt($stored))->toBe('plain-text-value');
+    });
 
-    /**
-     * The settings form round-trips the stored value, so resubmitting an
-     * untouched field hands the callback something already encrypted. Encrypting
-     * it a second time would make the key undecryptable.
-     */
-    #[Test]
-    public function an_already_encrypted_api_key_is_not_encrypted_twice(): void
-    {
+    // The settings form round-trips the stored value, so resubmitting an
+    // untouched field hands the callback something already encrypted. Encrypting
+    // it a second time would make the key undecryptable.
+    it('does not encrypt an already-encrypted API key twice', function () {
         $encryption = new Encryption();
         $once       = $encryption->encrypt('plain-text-value');
 
-        $this->assertSame($once, $this->admin->sanitizeAndEncryptApiKey($once));
-    }
+        expect($this->admin->sanitizeAndEncryptApiKey($once))->toBe($once);
+    });
 
-    /**
-     * @param mixed         $input
-     * @param array<string> $expected
-     */
-    #[DataProvider('dashboardFieldSubmissions')]
-    #[Test]
-    public function the_dashboard_fields_setting_is_filtered_to_the_whitelist(mixed $input, array $expected): void
-    {
-        $this->assertSame($expected, $this->admin->sanitizeDashboardFields($input));
-    }
+    it('filters the dashboard fields setting to the whitelist', function (mixed $input, array $expected) {
+        expect($this->admin->sanitizeDashboardFields($input))->toBe($expected);
+    })->with([
+        'not an array'              => ['day', []],
+        'nothing ticked'            => [[], []],
+        'a single field'            => [['town'], ['town']],
+        'unknown keys are dropped'  => [['town', 'nonsense', 'DROP TABLE'], ['town']],
+        'reordered to whitelist'    => [['postcode', 'day'], ['day', 'postcode']],
+        'duplicates collapse'       => [['day', 'day'], ['day']],
+        // The hidden empty value that makes an all-unchecked submission
+        // reach the callback at all is not a whitelist key.
+        'the hidden empty value'    => [[''], []],
+    ]);
+});
 
-    /** @return array<string, array{0: mixed, 1: array<string>}> */
-    public static function dashboardFieldSubmissions(): array
-    {
-        return [
-            'not an array'              => ['day', []],
-            'nothing ticked'            => [[], []],
-            'a single field'            => [['town'], ['town']],
-            'unknown keys are dropped'  => [['town', 'nonsense', 'DROP TABLE'], ['town']],
-            'reordered to whitelist'    => [['postcode', 'day'], ['day', 'postcode']],
-            'duplicates collapse'       => [['day', 'day'], ['day']],
-            // The hidden empty value that makes an all-unchecked submission
-            // reach the callback at all is not a whitelist key.
-            'the hidden empty value'    => [[''], []],
-        ];
-    }
-
-    // ── field rendering ───────────────────────────────────────────────
-    #[Test]
-    public function the_api_key_field_shows_the_decrypted_value_in_a_password_input(): void
-    {
+// ── field rendering ───────────────────────────────────────────────
+describe('field rendering', function () {
+    it('shows the decrypted API key in a password input', function () {
         $encryption = new Encryption();
         WpState::$options[ConcordanceConfiguration::OPTION_API_KEY] = $encryption->encrypt('round-trip-me');
 
-        $html = $this->render([$this->admin, 'renderApiKeyField']);
+        $html = captureOutput([$this->admin, 'renderApiKeyField']);
 
-        $this->assertStringContainsString('type="password"', $html);
-        $this->assertStringContainsString('value="round-trip-me"', $html);
-        $this->assertStringContainsString('autocomplete="off"', $html);
-    }
+        expect($html)->toContain('type="password"')
+            ->toContain('value="round-trip-me"')
+            ->toContain('autocomplete="off"');
+    });
 
-    /**
-     * Encryption falls back to obfuscation without OpenSSL, and the field says
-     * so rather than implying the key is encrypted at rest. OpenSSL is loaded
-     * in this environment, so only the reassuring branch is assertable — the
-     * warning's absence is the assertion.
-     */
-    #[Test]
-    public function the_api_key_field_warns_only_when_openssl_is_missing(): void
-    {
-        $html = $this->render([$this->admin, 'renderApiKeyField']);
+    // Encryption falls back to obfuscation without OpenSSL, and the field says
+    // so rather than implying the key is encrypted at rest. OpenSSL is loaded
+    // in this environment, so only the reassuring branch is assertable — the
+    // warning's absence is the assertion.
+    it('warns on the API key field only when OpenSSL is missing', function () {
+        $html = captureOutput([$this->admin, 'renderApiKeyField']);
 
         if (extension_loaded('openssl')) {
-            $this->assertStringNotContainsString('OpenSSL PHP extension is not available', $html);
+            expect($html)->not->toContain('OpenSSL PHP extension is not available');
         } else {
-            $this->assertStringContainsString('OpenSSL PHP extension is not available', $html);
+            expect($html)->toContain('OpenSSL PHP extension is not available');
         }
-    }
+    });
 
-    #[Test]
-    public function the_numeric_fields_fall_back_to_their_documented_defaults(): void
-    {
-        $ttl     = $this->render([$this->admin, 'renderCacheTtlField']);
-        $timeout = $this->render([$this->admin, 'renderRequestTimeoutField']);
+    it('falls back to the documented defaults in the numeric fields', function () {
+        $ttl     = captureOutput([$this->admin, 'renderCacheTtlField']);
+        $timeout = captureOutput([$this->admin, 'renderRequestTimeoutField']);
 
-        $this->assertStringContainsString(
-            'value="' . ConcordanceConfiguration::DEFAULT_CACHE_TTL . '"',
-            $ttl
-        );
-        $this->assertStringContainsString('min="0"', $ttl);
-        $this->assertStringContainsString(
-            'value="' . ConcordanceConfiguration::DEFAULT_REQUEST_TIMEOUT . '"',
-            $timeout
-        );
-        $this->assertStringContainsString('min="1"', $timeout);
-    }
+        expect($ttl)->toContain('value="' . ConcordanceConfiguration::DEFAULT_CACHE_TTL . '"')
+            ->toContain('min="0"')
+            ->and($timeout)->toContain('value="' . ConcordanceConfiguration::DEFAULT_REQUEST_TIMEOUT . '"')
+            ->toContain('min="1"');
+    });
 
-    #[Test]
-    public function the_numeric_fields_show_the_saved_values(): void
-    {
+    it('shows the saved values in the numeric fields', function () {
         WpState::$options[ConcordanceConfiguration::OPTION_CACHE_TTL]        = 120;
         WpState::$options[ConcordanceConfiguration::OPTION_REQUEST_TIMEOUT]  = 5;
 
-        $this->assertStringContainsString('value="120"', $this->render([$this->admin, 'renderCacheTtlField']));
-        $this->assertStringContainsString('value="5"', $this->render([$this->admin, 'renderRequestTimeoutField']));
-    }
+        expect(captureOutput([$this->admin, 'renderCacheTtlField']))->toContain('value="120"')
+            ->and(captureOutput([$this->admin, 'renderRequestTimeoutField']))->toContain('value="5"');
+    });
 
-    #[Test]
-    public function the_base_url_field_defaults_to_the_aagbdb_api(): void
-    {
-        $html = $this->render([$this->admin, 'renderApiBaseUrlField']);
+    it('defaults the base URL field to the AAGBDB API', function () {
+        $html = captureOutput([$this->admin, 'renderApiBaseUrlField']);
 
-        $this->assertStringContainsString('type="url"', $html);
-        $this->assertStringContainsString(
-            'value="' . ConcordanceConfiguration::DEFAULT_API_BASE_URL . '"',
-            $html
-        );
-    }
+        expect($html)->toContain('type="url"')
+            ->toContain('value="' . ConcordanceConfiguration::DEFAULT_API_BASE_URL . '"');
+    });
 
-    #[Test]
-    public function the_base_url_field_shows_the_saved_value(): void
-    {
+    it('shows the saved value in the base URL field', function () {
         WpState::$options[ConcordanceConfiguration::OPTION_API_BASE_URL] = 'https://staging.example.test/api';
 
-        $this->assertStringContainsString(
-            'value="https://staging.example.test/api"',
-            $this->render([$this->admin, 'renderApiBaseUrlField'])
-        );
-    }
+        expect(captureOutput([$this->admin, 'renderApiBaseUrlField']))
+            ->toContain('value="https://staging.example.test/api"');
+    });
 
-    #[Test]
-    public function the_dashboard_fields_grid_ticks_the_saved_selection(): void
-    {
+    it('ticks the saved selection in the dashboard fields grid', function () {
         WpState::$options[ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS] = ['town'];
 
-        $html = $this->render([$this->admin, 'renderDashboardFieldsField']);
+        $html = captureOutput([$this->admin, 'renderDashboardFieldsField']);
 
         // One checkbox per whitelist entry, plus the hidden empty value.
-        $this->assertSame(
-            count(ConcordanceConfiguration::DASHBOARD_FIELDS),
-            substr_count($html, 'id="concordance-field-')
-        );
-        $this->assertStringContainsString('type="hidden"', $html);
-        $this->assertStringContainsString('value="town" checked', $html);
-        $this->assertStringNotContainsString('value="day" checked', $html);
+        expect(substr_count($html, 'id="concordance-field-'))->toBe(count(ConcordanceConfiguration::DASHBOARD_FIELDS))
+            ->and($html)->toContain('type="hidden"')
+            ->toContain('value="town" checked')
+            ->not->toContain('value="day" checked');
 
         // The helper buttons and the defaults they restore.
         foreach (['all', 'none', 'defaults'] as $action) {
-            $this->assertStringContainsString('data-concordance-fields-action="' . $action . '"', $html);
+            expect($html)->toContain('data-concordance-fields-action="' . $action . '"');
         }
-    }
+    });
 
-    /**
-     * A corrupted option (say, a string where a list belongs) must not blank
-     * the grid — the defaults stand in.
-     */
-    #[Test]
-    public function a_non_array_dashboard_fields_option_falls_back_to_the_defaults(): void
-    {
+    // A corrupted option (say, a string where a list belongs) must not blank
+    // the grid — the defaults stand in.
+    it('falls back to the defaults for a non-array dashboard fields option', function () {
         WpState::$options[ConcordanceConfiguration::OPTION_DASHBOARD_FIELDS] = 'corrupted';
 
-        $html = $this->render([$this->admin, 'renderDashboardFieldsField']);
+        $html = captureOutput([$this->admin, 'renderDashboardFieldsField']);
 
         foreach (ConcordanceConfiguration::DEFAULT_DASHBOARD_FIELDS as $key) {
-            $this->assertStringContainsString('value="' . $key . '" checked', $html);
+            expect($html)->toContain('value="' . $key . '" checked');
         }
-    }
+    });
+});
 
-    // ── the intergroup dropdown (built from cached API data) ──────────
-    #[Test]
-    public function the_intergroup_dropdown_lists_the_intergroups_the_api_returned(): void
-    {
-        $this->cache->method('getGroups')->willReturn($this->groupsResponse());
+// ── the intergroup dropdown (built from cached API data) ──────────
+describe('the intergroup dropdown', function () {
+    it('lists the intergroups the API returned', function () {
+        $this->cache->method('getGroups')->willReturn(settingsGroupsResponse());
 
-        $html = $this->render([$this->admin, 'renderIntergroupIdField']);
+        $html = captureOutput([$this->admin, 'renderIntergroupIdField']);
 
-        $this->assertStringContainsString('>All intergroups</option>', $html);
-        $this->assertStringContainsString('<option value="7">Bristol</option>', $html);
-        $this->assertStringContainsString('<option value="9">Cornwall</option>', $html);
-        $this->assertStringContainsString('will appear in the dashboard widget', $html);
-    }
+        expect($html)->toContain('>All intergroups</option>')
+            ->toContain('<option value="7">Bristol</option>')
+            ->toContain('<option value="9">Cornwall</option>')
+            ->toContain('will appear in the dashboard widget');
+    });
 
-    /**
-     * Sorted alphabetically by name rather than by id, because the id order
-     * the API happens to return is meaningless to the person picking one.
-     */
-    #[Test]
-    public function the_intergroup_dropdown_is_sorted_by_name(): void
-    {
-        $this->cache->method('getGroups')->willReturn($this->groupsResponse());
+    // Sorted alphabetically by name rather than by id, because the id order
+    // the API happens to return is meaningless to the person picking one.
+    it('is sorted by name', function () {
+        $this->cache->method('getGroups')->willReturn(settingsGroupsResponse());
 
-        $html = $this->render([$this->admin, 'renderIntergroupIdField']);
+        $html = captureOutput([$this->admin, 'renderIntergroupIdField']);
 
-        $this->assertLessThan(
+        expect(strpos($html, '>Bristol<'))->toBeLessThan(
             strpos($html, '>Cornwall<'),
-            strpos($html, '>Bristol<'),
             'Bristol (id 7) should sort before Cornwall (id 9) by name, not by id'
         );
-    }
+    });
 
-    #[Test]
-    public function the_saved_intergroup_is_preselected(): void
-    {
+    it('preselects the saved intergroup', function () {
         WpState::$options[ConcordanceConfiguration::OPTION_INTERGROUP_ID] = 9;
-        $this->cache->method('getGroups')->willReturn($this->groupsResponse());
+        $this->cache->method('getGroups')->willReturn(settingsGroupsResponse());
 
-        $html = $this->render([$this->admin, 'renderIntergroupIdField']);
+        $html = captureOutput([$this->admin, 'renderIntergroupIdField']);
 
-        $this->assertStringContainsString('<option value="9" selected>Cornwall</option>', $html);
-        $this->assertStringNotContainsString('<option value="0" selected>', $html);
-    }
+        expect($html)->toContain('<option value="9" selected>Cornwall</option>')
+            ->not->toContain('<option value="0" selected>');
+    });
 
-    #[Test]
-    public function the_all_sentinel_is_selected_by_default(): void
-    {
-        $this->cache->method('getGroups')->willReturn($this->groupsResponse());
+    it('selects the all sentinel by default', function () {
+        $this->cache->method('getGroups')->willReturn(settingsGroupsResponse());
 
-        $html = $this->render([$this->admin, 'renderIntergroupIdField']);
+        $html = captureOutput([$this->admin, 'renderIntergroupIdField']);
 
-        $this->assertStringContainsString(
-            '<option value="' . ConcordanceConfiguration::INTERGROUP_ID_ALL . '" selected>',
-            $html
-        );
-    }
+        expect($html)->toContain('<option value="' . ConcordanceConfiguration::INTERGROUP_ID_ALL . '" selected>');
+    });
 
-    /**
-     * An intergroup with no usable name still needs a label, or it renders as
-     * an empty, unpickable row.
-     */
-    #[Test]
-    public function an_unnamed_intergroup_falls_back_to_its_id(): void
-    {
+    // An intergroup with no usable name still needs a label, or it renders as
+    // an empty, unpickable row.
+    it('falls back to the id for an unnamed intergroup', function () {
         $this->cache->method('getGroups')->willReturn([
             ['id' => 1, 'groupName' => 'A', 'intergroupId' => 4, 'intergroupName' => ''],
         ]);
 
-        $this->assertStringContainsString(
-            '<option value="4">Intergroup #4</option>',
-            $this->render([$this->admin, 'renderIntergroupIdField'])
-        );
-    }
+        expect(captureOutput([$this->admin, 'renderIntergroupIdField']))
+            ->toContain('<option value="4">Intergroup #4</option>');
+    });
 
-    #[Test]
-    public function intergroups_are_deduplicated_and_unidentified_ones_skipped(): void
-    {
+    it('deduplicates intergroups and skips unidentified ones', function () {
         $this->cache->method('getGroups')->willReturn([
             ['id' => 1, 'groupName' => 'A', 'intergroupId' => 7, 'intergroupName' => 'BRISTOL'],
             ['id' => 2, 'groupName' => 'B', 'intergroupId' => 7, 'intergroupName' => 'BRISTOL'],
             ['id' => 3, 'groupName' => 'C', 'intergroupId' => 0, 'intergroupName' => 'Unassigned'],
         ]);
 
-        $html = $this->render([$this->admin, 'renderIntergroupIdField']);
+        $html = captureOutput([$this->admin, 'renderIntergroupIdField']);
 
-        $this->assertSame(1, substr_count($html, '>Bristol</option>'), 'the duplicate should collapse');
-        $this->assertStringNotContainsString('Unassigned', $html, 'intergroup id 0 is the "all" sentinel');
-    }
+        expect(substr_count($html, '>Bristol</option>'))->toBe(1, 'the duplicate should collapse')
+            ->and(str_contains($html, 'Unassigned'))->toBeFalse('intergroup id 0 is the "all" sentinel');
+    });
 
-    #[DataProvider('emptyIntergroupSources')]
-    #[Test]
-    public function an_empty_choice_list_still_renders_a_usable_dropdown(
-        callable $configure,
-        bool $withCache
-    ): void {
-        $configure($this);
+    // The response seeds the ApiCache double; null leaves it unconfigured,
+    // which is what the no-cache-service case wants.
+    it('still renders a usable dropdown from an empty choice list', function (array|WP_Error|null $response, bool $withCache) {
+        if ($response !== null) {
+            $this->cache->method('getGroups')->willReturn($response);
+        }
 
         $admin = $withCache
             ? new SettingsAdmin($this->client, new Encryption(), $this->cache)
             : new SettingsAdmin($this->client, new Encryption(), null);
 
-        $html = $this->render([$admin, 'renderIntergroupIdField']);
+        $html = captureOutput([$admin, 'renderIntergroupIdField']);
 
-        $this->assertStringContainsString('>All intergroups</option>', $html);
-        $this->assertStringContainsString('No intergroup data is available yet', $html);
-    }
+        expect($html)->toContain('>All intergroups</option>')
+            ->toContain('No intergroup data is available yet');
+    })->with([
+        'no cache service'         => [null, false],
+        'the api errored'          => [new WP_Error('http_error', 'unreachable'), true],
+        'the api returned nothing' => [[], true],
+    ]);
 
-    /** @return array<string, array{0: callable, 1: bool}> */
-    public static function emptyIntergroupSources(): array
-    {
-        return [
-            'no cache service' => [
-                static function (self $test): void {
-                },
-                false,
-            ],
-            'the api errored' => [
-                static function (self $test): void {
-                    $test->cacheReturns(new WP_Error('http_error', 'unreachable'));
-                },
-                true,
-            ],
-            'the api returned nothing' => [
-                static function (self $test): void {
-                    $test->cacheReturns([]);
-                },
-                true,
-            ],
-        ];
-    }
-
-    /**
-     * A saved intergroup that the (empty) cache cannot name must stay visible,
-     * or saving the form would silently reset the filter to "All".
-     */
-    #[Test]
-    public function a_saved_intergroup_survives_an_empty_choice_list(): void
-    {
+    // A saved intergroup that the (empty) cache cannot name must stay visible,
+    // or saving the form would silently reset the filter to "All".
+    it('keeps a saved intergroup through an empty choice list', function () {
         WpState::$options[ConcordanceConfiguration::OPTION_INTERGROUP_ID] = 42;
         $this->cache->method('getGroups')->willReturn([]);
 
-        $html = $this->render([$this->admin, 'renderIntergroupIdField']);
+        $html = captureOutput([$this->admin, 'renderIntergroupIdField']);
 
-        $this->assertStringContainsString('<option value="42" selected>', $html);
-        $this->assertStringContainsString('Intergroup #42 (currently saved)', $html);
-    }
+        expect($html)->toContain('<option value="42" selected>')
+            ->toContain('Intergroup #42 (currently saved)');
+    });
+});
 
-    // ── the full settings page ────────────────────────────────────────
-    #[Test]
-    public function the_settings_page_renders_nothing_without_the_capability(): void
-    {
+// ── the full settings page ────────────────────────────────────────
+describe('the settings page', function () {
+    it('renders nothing without the capability', function () {
         WpState::$userCan = false;
 
-        $this->assertSame('', $this->render([$this->admin, 'renderSettingsPage']));
-    }
+        expect(captureOutput([$this->admin, 'renderSettingsPage']))->toBe('');
+    });
 
-    #[Test]
-    public function the_settings_page_renders_all_four_of_its_sections(): void
-    {
-        $html = $this->render([$this->admin, 'renderSettingsPage']);
+    it('renders all four of its sections', function () {
+        $html = captureOutput([$this->admin, 'renderSettingsPage']);
 
-        $this->assertStringContainsString('<form action="options.php" method="post">', $html);
-        $this->assertStringContainsString('Cache Maintenance', $html);
-        $this->assertStringContainsString('Connection Test', $html);
-        $this->assertStringContainsString('Usage', $html);
-        $this->assertStringContainsString('/wp-json/' . ConcordanceConfiguration::REST_NAMESPACE . '/groups', $html);
-        $this->assertStringContainsString('wp concordance flush-cache', $html);
-    }
+        expect($html)->toContain('<form action="options.php" method="post">')
+            ->toContain('Cache Maintenance')
+            ->toContain('Connection Test')
+            ->toContain('Usage')
+            ->toContain('/wp-json/' . ConcordanceConfiguration::REST_NAMESPACE . '/groups')
+            ->toContain('wp concordance flush-cache');
+    });
 
-    #[Test]
-    public function the_flush_cache_link_carries_its_own_nonce(): void
-    {
-        $html = $this->render([$this->admin, 'renderSettingsPage']);
+    it('gives the flush cache link its own nonce', function () {
+        $html = captureOutput([$this->admin, 'renderSettingsPage']);
 
-        $this->assertStringContainsString('concordance_flush_cache=1', $html);
-        $this->assertStringContainsString('_wpnonce=nonce-concordance_flush_cache_nonce', $html);
-        $this->assertStringContainsString('concordance_test=1', $html);
-        $this->assertStringContainsString('_wpnonce=nonce-concordance_test_nonce', $html);
-    }
+        expect($html)->toContain('concordance_flush_cache=1')
+            ->toContain('_wpnonce=nonce-concordance_flush_cache_nonce')
+            ->toContain('concordance_test=1')
+            ->toContain('_wpnonce=nonce-concordance_test_nonce');
+    });
 
-    #[DataProvider('flushResultFlags')]
-    #[Test]
-    public function the_cache_flush_result_is_reported_back_on_the_page(
-        string $flag,
-        string $expected,
-        string $noticeClass
-    ): void {
+    it('reports the cache flush result back on the page', function (string $flag, string $expected, string $noticeClass) {
         $_GET['concordance_flushed'] = $flag;
 
-        $html = $this->render([$this->admin, 'renderSettingsPage']);
+        $html = captureOutput([$this->admin, 'renderSettingsPage']);
 
-        $this->assertStringContainsString($noticeClass, $html);
-        $this->assertStringContainsString($expected, $html);
-    }
+        expect($html)->toContain($noticeClass)
+            ->toContain($expected);
+    })->with([
+        'rejected nonce'    => ['invalid', 'invalid security token', 'notice-error'],
+        'no cache service'  => ['unavailable', 'Cache service is unavailable', 'notice-error'],
+        'flush threw'       => ['error', 'Cache flush failed', 'notice-error'],
+        'flushed'           => ['cleared', 'Cache flushed.', 'notice-success'],
+    ]);
 
-    /** @return array<string, array{0: string, 1: string, 2: string}> */
-    public static function flushResultFlags(): array
-    {
-        return [
-            'rejected nonce'    => ['invalid', 'invalid security token', 'notice-error'],
-            'no cache service'  => ['unavailable', 'Cache service is unavailable', 'notice-error'],
-            'flush threw'       => ['error', 'Cache flush failed', 'notice-error'],
-            'flushed'           => ['cleared', 'Cache flushed.', 'notice-success'],
-        ];
-    }
-
-    /**
-     * A count is no longer a flag: flushing advances a generation, so there is
-     * nothing to count. A link from before that change carries a digit, and
-     * rendering nothing beats reporting a number that was always zero on a
-     * site with an object cache.
-     */
-    #[Test]
-    public function a_stale_numeric_flush_flag_renders_no_notice(): void
-    {
+    // A count is no longer a flag: flushing advances a generation, so there is
+    // nothing to count. A link from before that change carries a digit, and
+    // rendering nothing beats reporting a number that was always zero on a
+    // site with an object cache.
+    it('renders no notice for a stale numeric flush flag', function () {
         $_GET['concordance_flushed'] = '12';
 
-        $this->assertStringNotContainsString(
-            'is-dismissible',
-            $this->render([$this->admin, 'renderSettingsPage'])
-        );
-    }
+        expect(captureOutput([$this->admin, 'renderSettingsPage']))->not->toContain('is-dismissible');
+    });
 
-    #[Test]
-    public function an_unrecognised_flush_flag_renders_no_notice(): void
-    {
+    it('renders no notice for an unrecognised flush flag', function () {
         $_GET['concordance_flushed'] = 'not-a-flag';
 
-        $this->assertStringNotContainsString(
-            'is-dismissible',
-            $this->render([$this->admin, 'renderSettingsPage'])
-        );
-    }
+        expect(captureOutput([$this->admin, 'renderSettingsPage']))->not->toContain('is-dismissible');
+    });
+});
 
-    // ── the connection test ───────────────────────────────────────────
-    #[Test]
-    public function the_api_is_not_called_until_the_connection_test_is_requested(): void
-    {
+// ── the connection test ───────────────────────────────────────────
+describe('the connection test', function () {
+    it('does not call the API until the connection test is requested', function () {
         $this->client->expects($this->never())->method('getGroups');
 
-        $this->render([$this->admin, 'renderSettingsPage']);
-    }
+        captureOutput([$this->admin, 'renderSettingsPage']);
+    });
 
-    #[Test]
-    public function the_connection_test_is_ignored_without_a_valid_nonce(): void
-    {
+    it('is ignored without a valid nonce', function () {
         $_GET['concordance_test'] = '1';
         $_GET['_wpnonce']         = 'forged';
         $this->client->expects($this->never())->method('getGroups');
 
-        $this->render([$this->admin, 'renderSettingsPage']);
-    }
+        captureOutput([$this->admin, 'renderSettingsPage']);
+    });
 
-    #[Test]
-    public function a_successful_connection_test_reports_the_group_count(): void
-    {
-        $this->requestConnectionTest();
-        $this->client->method('getGroups')->willReturn($this->groupsResponse());
+    it('reports the group count on success', function () {
+        requestConnectionTest();
+        $this->client->method('getGroups')->willReturn(settingsGroupsResponse());
 
-        $html = $this->render([$this->admin, 'renderSettingsPage']);
+        $html = captureOutput([$this->admin, 'renderSettingsPage']);
 
-        $this->assertStringContainsString('notice-success', $html);
-        $this->assertStringContainsString('Received 3 group(s) from the API', $html);
-    }
+        expect($html)->toContain('notice-success')
+            ->toContain('Received 3 group(s) from the API');
+    });
 
-    /**
-     * The first record is echoed to the browser console so the payload shape
-     * can be inspected when choosing Visible Fields.
-     */
-    #[Test]
-    public function a_successful_connection_test_logs_the_first_raw_record(): void
-    {
-        $this->requestConnectionTest();
-        $this->client->method('getGroups')->willReturn($this->groupsResponse());
+    // The first record is echoed to the browser console so the payload shape
+    // can be inspected when choosing Visible Fields.
+    it('logs the first raw record on success', function () {
+        requestConnectionTest();
+        $this->client->method('getGroups')->willReturn(settingsGroupsResponse());
 
-        $html = $this->render([$this->admin, 'renderSettingsPage']);
+        $html = captureOutput([$this->admin, 'renderSettingsPage']);
 
-        $this->assertStringContainsString('<script>console.log(', $html);
-        // The *first* record, pretty-printed — not the whole collection.
-        $this->assertStringContainsString('"groupName": "Monday Nooners"', $html);
-        $this->assertStringNotContainsString('Tuesday Steps', $html);
-        $this->assertStringContainsString('open DevTools', $html);
-    }
+        expect($html)->toContain('<script>console.log(')
+            // The *first* record, pretty-printed — not the whole collection.
+            ->toContain('"groupName": "Monday Nooners"')
+            ->not->toContain('Tuesday Steps')
+            ->toContain('open DevTools');
+    });
 
-    #[Test]
-    public function an_empty_successful_response_logs_nothing_to_the_console(): void
-    {
-        $this->requestConnectionTest();
+    it('logs nothing to the console for an empty successful response', function () {
+        requestConnectionTest();
         $this->client->method('getGroups')->willReturn([]);
 
-        $html = $this->render([$this->admin, 'renderSettingsPage']);
+        $html = captureOutput([$this->admin, 'renderSettingsPage']);
 
-        $this->assertStringContainsString('Received 0 group(s) from the API', $html);
-        $this->assertStringNotContainsString('console.log', $html);
-    }
+        expect($html)->toContain('Received 0 group(s) from the API')
+            ->not->toContain('console.log');
+    });
 
-    #[Test]
-    public function a_failed_connection_test_shows_the_api_error_message(): void
-    {
-        $this->requestConnectionTest();
+    it('shows the API error message on failure', function () {
+        requestConnectionTest();
         $this->client->method('getGroups')->willReturn(new WP_Error('http_error', 'Connection refused'));
 
-        $html = $this->render([$this->admin, 'renderSettingsPage']);
+        $html = captureOutput([$this->admin, 'renderSettingsPage']);
 
-        $this->assertStringContainsString('notice-error', $html);
-        $this->assertStringContainsString('Connection refused', $html);
-    }
+        expect($html)->toContain('notice-error')
+            ->toContain('Connection refused');
+    });
 
-    /**
-     * A thrown exception must surface as a notice rather than a white screen
-     * over the whole settings page.
-     */
-    #[Test]
-    public function a_thrown_exception_during_the_connection_test_is_caught(): void
-    {
-        $this->requestConnectionTest();
+    // A thrown exception must surface as a notice rather than a white screen
+    // over the whole settings page.
+    it('catches a thrown exception', function () {
+        requestConnectionTest();
         $this->client->method('getGroups')->willThrowException(new RuntimeException('client exploded'));
 
-        $html = $this->render([$this->admin, 'renderSettingsPage']);
+        $html = captureOutput([$this->admin, 'renderSettingsPage']);
 
-        $this->assertStringContainsString('notice-error', $html);
-        $this->assertStringContainsString('client exploded', $html);
-        // The rest of the page still renders.
-        $this->assertStringContainsString('Test API Connection', $html);
-    }
+        expect($html)->toContain('notice-error')
+            ->toContain('client exploded')
+            // The rest of the page still renders.
+            ->toContain('Test API Connection');
+    });
 
-    /**
-     * @param array<string, mixed>|null $expected
-     */
-    #[DataProvider('apiEnvelopes')]
-    #[Test]
-    public function the_first_raw_record_is_unwrapped_from_any_envelope(
-        mixed $response,
-        ?array $expected
-    ): void {
+    it('unwraps the first raw record from any envelope', function (mixed $response, ?array $expected) {
         $method = new ReflectionMethod(SettingsAdmin::class, 'extractFirstRawResult');
 
-        $this->assertSame($expected, $method->invoke($this->admin, $response));
-    }
+        expect($method->invoke($this->admin, $response))->toBe($expected);
+    })->with([
+        'not an array'        => ['nope', null],
+        'empty'               => [[], null],
+        'a bare list'         => [[FIRST_RAW_RECORD, ['id' => 2]], FIRST_RAW_RECORD],
+        'a results envelope'  => [['results' => [FIRST_RAW_RECORD]], FIRST_RAW_RECORD],
+        'a data envelope'     => [['data' => [FIRST_RAW_RECORD]], FIRST_RAW_RECORD],
+        'a single record'     => [FIRST_RAW_RECORD, FIRST_RAW_RECORD],
+        'an empty envelope'   => [['results' => []], null],
+        'a list of scalars'   => [['nope'], null],
+    ]);
+});
 
-    /** @return array<string, array{0: mixed, 1: array<string, mixed>|null}> */
-    public static function apiEnvelopes(): array
-    {
-        $record = ['id' => 1, 'groupName' => 'First'];
-
-        return [
-            'not an array'        => ['nope', null],
-            'empty'               => [[], null],
-            'a bare list'         => [[$record, ['id' => 2]], $record],
-            'a results envelope'  => [['results' => [$record]], $record],
-            'a data envelope'     => [['data' => [$record]], $record],
-            'a single record'     => [$record, $record],
-            'an empty envelope'   => [['results' => []], null],
-            'a list of scalars'   => [['nope'], null],
-        ];
-    }
-
-    // ── cache flush (reflection: the live caller exits) ───────────────
-    /**
-     * @param array<string, string> $get
-     */
-    #[DataProvider('ignoredFlushRequests')]
-    #[Test]
-    public function a_flush_that_should_be_ignored_produces_no_redirect(array $get, bool $userCan): void
-    {
+// ── cache flush (reflection: the live caller exits) ───────────────
+describe('cache flush', function () {
+    it('produces no redirect for a flush that should be ignored', function (array $get, bool $userCan) {
         $_GET             = $get;
         WpState::$userCan = $userCan;
 
-        $this->assertNull($this->resolveFlush());
-    }
+        expect(resolveFlush($this->admin))->toBeNull();
+    })->with([
+        'no flush requested'      => [[], true],
+        'requested without a cap' => [['concordance_flush_cache' => '1'], false],
+    ]);
 
-    /** @return array<string, array{0: array<string, string>, 1: bool}> */
-    public static function ignoredFlushRequests(): array
-    {
-        return [
-            'no flush requested'      => [[], true],
-            'requested without a cap' => [['concordance_flush_cache' => '1'], false],
-        ];
-    }
-
-    #[Test]
-    public function a_flush_with_a_forged_nonce_is_rejected(): void
-    {
+    it('rejects a flush with a forged nonce', function () {
         $_GET = ['concordance_flush_cache' => '1', '_wpnonce' => 'forged'];
         $this->cache->expects($this->never())->method('flush');
 
-        $this->assertStringContainsString('concordance_flushed=invalid', (string) $this->resolveFlush());
-    }
+        expect((string) resolveFlush($this->admin))->toContain('concordance_flushed=invalid');
+    });
 
-    #[Test]
-    public function a_flush_with_no_nonce_at_all_is_rejected(): void
-    {
+    it('rejects a flush with no nonce at all', function () {
         $_GET = ['concordance_flush_cache' => '1'];
 
-        $this->assertStringContainsString('concordance_flushed=invalid', (string) $this->resolveFlush());
-    }
+        expect((string) resolveFlush($this->admin))->toContain('concordance_flushed=invalid');
+    });
 
-    #[Test]
-    public function a_flush_without_a_cache_service_reports_it_as_unavailable(): void
-    {
-        $_GET  = $this->validFlushRequest();
+    it('reports a flush without a cache service as unavailable', function () {
+        $_GET  = validFlushRequest();
         $admin = new SettingsAdmin($this->client, new Encryption(), null);
 
-        $this->assertStringContainsString(
-            'concordance_flushed=unavailable',
-            (string) $this->resolveFlush($admin)
-        );
-    }
+        expect((string) resolveFlush($admin))->toContain('concordance_flushed=unavailable');
+    });
 
-    #[Test]
-    public function a_successful_flush_says_so(): void
-    {
-        $_GET = $this->validFlushRequest();
+    it('says so after a successful flush', function () {
+        $_GET = validFlushRequest();
         $this->cache->expects($this->once())->method('flush')->willReturn(true);
 
-        $this->assertStringContainsString('concordance_flushed=cleared', (string) $this->resolveFlush());
-    }
+        expect((string) resolveFlush($this->admin))->toContain('concordance_flushed=cleared');
+    });
 
-    #[Test]
-    public function a_flush_that_could_not_write_the_version_reports_an_error(): void
-    {
-        $_GET = $this->validFlushRequest();
+    it('reports an error for a flush that could not write the version', function () {
+        $_GET = validFlushRequest();
         $this->cache->expects($this->once())->method('flush')->willReturn(false);
 
-        $this->assertStringContainsString('concordance_flushed=error', (string) $this->resolveFlush());
-    }
+        expect((string) resolveFlush($this->admin))->toContain('concordance_flushed=error');
+    });
 
-    #[Test]
-    public function a_flush_that_throws_reports_an_error_rather_than_dying(): void
-    {
-        $_GET = $this->validFlushRequest();
+    it('reports an error rather than dying for a flush that throws', function () {
+        $_GET = validFlushRequest();
         $this->cache->method('flush')->willThrowException(new RuntimeException('db gone'));
 
-        $this->assertStringContainsString('concordance_flushed=error', (string) $this->resolveFlush());
-    }
+        expect((string) resolveFlush($this->admin))->toContain('concordance_flushed=error');
+    });
 
-    #[Test]
-    public function the_flush_redirect_lands_back_on_the_settings_page(): void
-    {
-        $_GET = $this->validFlushRequest();
+    it('lands the flush redirect back on the settings page', function () {
+        $_GET = validFlushRequest();
         $this->cache->method('flush')->willReturn(true);
 
-        $target = (string) $this->resolveFlush();
+        $target = (string) resolveFlush($this->admin);
 
-        $this->assertStringContainsString('/wp-admin/admin.php', $target);
-        $this->assertStringContainsString('page=concordance', $target);
-    }
+        expect($target)->toContain('/wp-admin/admin.php')
+            ->toContain('page=concordance');
+    });
 
-    #[Test]
-    public function handle_cache_flush_leaves_an_unrelated_request_alone(): void
-    {
+    it('leaves an unrelated request alone in handleCacheFlush', function () {
         $this->admin->handleCacheFlush();
 
-        $this->assertSame([], WpState::$redirects);
-    }
+        expect(WpState::$redirects)->toBe([]);
+    });
+});
 
-    // ── documentation link ────────────────────────────────────────────
-    #[Test]
-    public function the_docs_page_opens_the_bundled_html_in_a_new_tab(): void
-    {
+// ── documentation link ────────────────────────────────────────────
+describe('documentation link', function () {
+    it('opens the bundled HTML in a new tab from the docs page', function () {
         $expected = CONCORDANCE_PLUGIN_URL . 'assets/docs/concordance.html';
 
-        $html = $this->render([$this->admin, 'renderDocsRedirect']);
+        $html = captureOutput([$this->admin, 'renderDocsRedirect']);
 
-        $this->assertStringContainsString('window.open(', $html);
-        $this->assertStringContainsString($expected, $html);
-        $this->assertStringContainsString('target="_blank"', $html);
-    }
+        expect($html)->toContain('window.open(')
+            ->toContain($expected)
+            ->toContain('target="_blank"');
+    });
 
-    #[Test]
-    public function the_admin_footer_script_retargets_the_docs_menu_link(): void
-    {
-        $html = $this->render([$this->admin, 'addDocsNewTabScript']);
+    it('retargets the docs menu link from the admin footer script', function () {
+        $html = captureOutput([$this->admin, 'addDocsNewTabScript']);
 
-        $this->assertStringContainsString('a[href="admin.php?page=concordance-docs"]', $html);
-        // The URL goes through wp_json_encode(), so it lands slash-escaped.
-        $this->assertStringContainsString(
-            (string) json_encode(CONCORDANCE_PLUGIN_URL . 'assets/docs/concordance.html'),
-            $html
-        );
-        $this->assertStringContainsString("setAttribute('target', '_blank')", $html);
-    }
-
-    // ── helpers ───────────────────────────────────────────────────────
-
-    /**
-     * Seed the ApiCache double's response. Public so the data providers'
-     * closures can reach it.
-     *
-     * @param array<string, mixed>|WP_Error $response
-     */
-    public function cacheReturns(array|WP_Error $response): void
-    {
-        $this->cache->method('getGroups')->willReturn($response);
-    }
-
-    /** Mark the current request as a nonce-verified connection test. */
-    private function requestConnectionTest(): void
-    {
-        $_GET['concordance_test'] = '1';
-        $_GET['_wpnonce']         = 'nonce-concordance_test_nonce';
-    }
-
-    /** @return array<string, string> */
-    private function validFlushRequest(): array
-    {
-        return [
-            'concordance_flush_cache' => '1',
-            '_wpnonce'                => 'nonce-concordance_flush_cache_nonce',
-        ];
-    }
-
-    private function resolveFlush(?SettingsAdmin $admin = null): ?string
-    {
-        $method = new ReflectionMethod(SettingsAdmin::class, 'resolveCacheFlushRedirect');
-
-        /** @var string|null $target */
-        $target = $method->invoke($admin ?? $this->admin);
-
-        return $target;
-    }
-
-    private function render(callable $callback): string
-    {
-        ob_start();
-        try {
-            $callback();
-        } finally {
-            $html = (string) ob_get_clean();
-        }
-
-        return $html;
-    }
-
-    /**
-     * A three-group API response spanning two intergroups, with the
-     * alphabetically later intergroup first so sorting is observable.
-     *
-     * @return array<int, array<string, mixed>>
-     */
-    private function groupsResponse(): array
-    {
-        return [
-            [
-                'id' => 1, 'groupName' => 'Monday Nooners', 'town' => 'BRISTOL',
-                'intergroupId' => 9, 'intergroupName' => 'CORNWALL',
-                'day' => 'Monday', 'startTime' => '12:00', 'endTime' => '13:00',
-            ],
-            [
-                'id' => 2, 'groupName' => 'Tuesday Steps', 'town' => 'BATH',
-                'intergroupId' => 7, 'intergroupName' => 'BRISTOL',
-                'day' => 'Tuesday', 'startTime' => '19:30', 'endTime' => '21:00',
-            ],
-            [
-                'id' => 3, 'groupName' => 'Wednesday Big Book', 'town' => 'WELLS',
-                'intergroupId' => 7, 'intergroupName' => 'BRISTOL',
-                'day' => 'Wednesday', 'startTime' => '18:00', 'endTime' => '19:30',
-            ],
-        ];
-    }
-}
+        expect($html)->toContain('a[href="admin.php?page=concordance-docs"]')
+            // The URL goes through wp_json_encode(), so it lands slash-escaped.
+            ->toContain((string) json_encode(CONCORDANCE_PLUGIN_URL . 'assets/docs/concordance.html'))
+            ->toContain("setAttribute('target', '_blank')");
+    });
+});

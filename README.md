@@ -286,7 +286,7 @@ composer install
 
 | Command | Description |
 |---|---|
-| `composer test` | Run the PHPUnit test suite |
+| `composer test` | Run the test suite (Pest) |
 | `composer phpstan` | Run PHPStan static analysis |
 
 Line coverage is reported to [Coveralls](https://coveralls.io/github/bleedingdeacons/concordance?branch=main)

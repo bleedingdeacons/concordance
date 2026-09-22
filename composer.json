@@ -23,6 +23,7 @@
     },
     "require-dev": {
         "bleedingdeacons/wp-mocks": "^3.0",
+        "pestphp/pest": "^5.2",
         "php-stubs/wp-cli-stubs": "^2.12",
         "phpstan/phpstan": "^2.0",
         "phpunit/phpunit": "^13.0",
@@ -44,13 +45,16 @@
         "build:production": "php build.php build:production",
         "build:dev": "php build.php build:dev",
         "build:clean": "php build.php clean",
-        "test": "phpunit",
+        "test": "pest",
         "phpcs": "phpcs --standard=.phpcs.xml.dist",
         "phpcs:fix": "phpcbf --standard=.phpcs.xml.dist",
         "phpstan": "phpstan analyse --memory-limit=1G"
     },
     "config": {
         "optimize-autoloader": true,
-        "sort-packages": true
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
     }
 }

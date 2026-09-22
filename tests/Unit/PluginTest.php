@@ -4,74 +4,56 @@ declare(strict_types=1);
 
 namespace Concordance\Tests\Unit;
 
-use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\PreserveGlobalState;
-use PHPUnit\Framework\Attributes\RunInSeparateProcess;
-use Concordance\Plugin;
-use Concordance\Managers\GroupListingManager;
-use BleedingDeacons\WpMocks\TestCase;
 use BleedingDeacons\WpMocks\WpState;
+use Concordance\Managers\GroupListingManager;
+use Concordance\Plugin;
 use Psr\Container\ContainerInterface;
 use ReflectionClass;
 use RuntimeException;
 
-#[CoversClass(\Concordance\Plugin::class)]
-class PluginTest extends TestCase
+/*
+ * Tests for the Plugin bootstrap: building the container once, and refusing
+ * to hand it out before it exists.
+ *
+ * The WP-CLI registration test lives in PluginWpCliTest, a PHPUnit class: it
+ * defines WP_CLI, so it needs a separate process, which Pest refuses.
+ */
+
+covers(\Concordance\Plugin::class);
+
+function resetPluginStatics(): void
 {
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->resetStatics();
-        // parent::setUp() clears WpState's options; is_admin() defaults to
-        // true there, and Plugin::init's admin-only branch needs it off.
-        WpState::$isAdmin = false;
-    }
-
-    protected function tearDown(): void
-    {
-        $this->resetStatics();
-        parent::tearDown();
-    }
-
-    private function resetStatics(): void
-    {
-        $ref = new ReflectionClass(Plugin::class);
-        $ref->getProperty('container')->setValue(null, null);
-        $ref->getProperty('initialized')->setValue(null, false);
-    }
-
-    public function testInitBuildsContainerAndResolvesManager(): void
-    {
-        Plugin::init();
-
-        $container = Plugin::getContainer();
-        $this->assertInstanceOf(ContainerInterface::class, $container);
-        $this->assertInstanceOf(GroupListingManager::class, $container->get(GroupListingManager::class));
-    }
-
-    public function testInitIsIdempotent(): void
-    {
-        Plugin::init();
-        $first = Plugin::getContainer();
-        Plugin::init();
-        $this->assertSame($first, Plugin::getContainer());
-    }
-
-    public function testGetContainerThrowsBeforeInit(): void
-    {
-        $this->expectException(RuntimeException::class);
-        Plugin::getContainer();
-    }
-
-    #[PreserveGlobalState(false)]
-    #[RunInSeparateProcess]
-    public function testInitRegistersCliCommandsWhenWpCliDefined(): void
-    {
-        define('WP_CLI', true);
-        $GLOBALS['conc_cli_commands'] = [];
-
-        Plugin::init();
-
-        $this->assertContains('concordance', $GLOBALS['conc_cli_commands']);
-    }
+    $ref = new ReflectionClass(Plugin::class);
+    $ref->getProperty('container')->setValue(null, null);
+    $ref->getProperty('initialized')->setValue(null, false);
 }
+
+beforeEach(function () {
+    resetPluginStatics();
+    // The TestCase's setUp() clears WpState's options; is_admin() defaults to
+    // true there, and Plugin::init's admin-only branch needs it off.
+    WpState::$isAdmin = false;
+});
+
+afterEach(function () {
+    resetPluginStatics();
+});
+
+it('builds the container on init and resolves the manager from it', function () {
+    Plugin::init();
+
+    $container = Plugin::getContainer();
+    expect($container)->toBeInstanceOf(ContainerInterface::class)
+        ->and($container->get(GroupListingManager::class))->toBeInstanceOf(GroupListingManager::class);
+});
+
+it('is idempotent across repeated inits', function () {
+    Plugin::init();
+    $first = Plugin::getContainer();
+    Plugin::init();
+    expect(Plugin::getContainer())->toBe($first);
+});
+
+it('throws when the container is requested before init', function () {
+    Plugin::getContainer();
+})->throws(RuntimeException::class);
