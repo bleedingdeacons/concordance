@@ -1,7 +1,6 @@
 # Concordance
 
 [![CI](https://github.com/bleedingdeacons/concordance/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bleedingdeacons/concordance/actions/workflows/ci.yml)
-[![Tests](https://github.com/bleedingdeacons/concordance/actions/workflows/ci.yml/badge.svg)](https://github.com/bleedingdeacons/concordance/actions/workflows/ci.yml)
 [![Semgrep](https://github.com/bleedingdeacons/concordance/actions/workflows/semgrep.yml/badge.svg?branch=main)](https://github.com/bleedingdeacons/concordance/actions/workflows/semgrep.yml)
 [![Coverage Status](https://coveralls.io/repos/github/bleedingdeacons/concordance/badge.svg?branch=main)](https://coveralls.io/github/bleedingdeacons/concordance?branch=main)
 ![PHPStan](https://img.shields.io/badge/dynamic/yaml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fbleedingdeacons%2Fconcordance%2Fmain%2Fphpstan.neon.dist&query=%24.parameters.level&label=PHPStan&prefix=level%20&color=brightgreen)
