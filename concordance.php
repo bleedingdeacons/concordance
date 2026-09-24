@@ -3,7 +3,7 @@
 /**
  * Plugin Name: Concordance
  * Description: API client for the AAGBDB Groups API. Standalone plugin with PSR-11 container.
- * Version: 2.0.3
+ * Version: 2.0.4
  * Build date: 2026/05/31
  * Requires at least: 6.0
  * Requires PHP: 8.4
